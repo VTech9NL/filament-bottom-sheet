@@ -53,6 +53,18 @@ it('gives the modal and the slide-over breakpoints together, in each order', fun
         ->toContain('data-bottom-sheet-modal-from="64rem"');
 });
 
+it('gives the sticky settings of the action to the slide-over type', function (): void {
+    $default = renderActionModal(Action::make('edit')->bottomSheet()->slideOverFrom('lg'));
+    $off = renderActionModal(Action::make('edit')->stickyModalHeader(false)->stickyModalFooter(false)->bottomSheet()->slideOverFrom('lg'));
+
+    expect(openingTag($default, 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-slide-over-sticky-header="true"')
+        ->toContain('data-bottom-sheet-slide-over-sticky-footer="true"')
+        ->and(openingTag($off, 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-slide-over-sticky-header="false"')
+        ->toContain('data-bottom-sheet-slide-over-sticky-footer="false"');
+});
+
 it('renders the modal root of a slide-over type as a Filament modal', function (): void {
     $html = renderActionModal(Action::make('edit')->bottomSheet()->slideOverFrom('lg'));
 

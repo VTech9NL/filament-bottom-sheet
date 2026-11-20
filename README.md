@@ -165,7 +165,7 @@ The breakpoint names are the Tailwind CSS v4 defaults:
 ## Limits
 
 - A nested action stacks on a sheet only when it calls `->overlayParentActions()`.
-- The slide-over type always has a sticky header and footer, as a Filament slide-over has by default. In the modal type and the sheet type, `stickyModalHeader()` and `stickyModalFooter()` apply as in Filament.
+- The slide-over type uses the sticky settings of the action, as a Filament slide-over does.
 - `composer serve` builds the workbench theme and starts the demo panel.
 
 ## Testing
