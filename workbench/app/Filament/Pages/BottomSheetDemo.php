@@ -61,9 +61,8 @@ class BottomSheetDemo extends Page
                 ->modalFrom('md'),
             $this->editAction('noOverlay', 'Sheet, no overlay')
                 ->color('gray')
-                ->modalDescription('A sheet with no dark layer. The page behind stays visible and usable.')
-                ->bottomSheet()
-                ->bottomSheetOverlay(false),
+                ->modalDescription('A sheet with no dark layer. A tap outside closes it.')
+                ->bottomSheet(initialHeight: 0.6, overlay: false),
         ];
     }
 
