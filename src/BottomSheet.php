@@ -190,6 +190,9 @@ final class BottomSheet
         }
 
         return match ($part) {
+            // `wire:ignore.self` keeps the classes of the directive. Before a
+            // Livewire update, the directive reads the new attributes of the
+            // markup, so a new condition or option takes effect.
             self::PART_MODAL_WINDOW => [
                 'x-bottom-sheet' => '',
                 'wire:ignore.self' => '',
@@ -202,10 +205,8 @@ final class BottomSheet
                 // Hide the section below the breakpoint from the first paint.
                 // The directive removes this class when it takes over.
                 'class' => self::HIDDEN_BELOW[$this->until],
-                // The state of the focus trap and the page scroll lock of the
-                // Alpine focus plugin, which the directive sets.
-                'x-data' => '{ isBottomSheetOpen: false }',
-                'x-trap.noscroll.noreturn.noautofocus' => 'isBottomSheetOpen',
+                // No `x-data`: the directive keeps the sheet state, the focus
+                // trap and the scroll lock, so the app can use `x-data` here.
                 'x-bottom-sheet.section' => '',
                 'wire:ignore.self' => '',
                 'data-bottom-sheet-id' => $this->sectionId($component),

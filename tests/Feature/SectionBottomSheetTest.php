@@ -10,8 +10,8 @@ it('marks the section as a bottom sheet with its id and the default options', fu
     expect(openingTag($html, 'fi-sc-section'))
         ->toContain('x-bottom-sheet.section=""')
         ->toContain('wire:ignore.self=""')
-        ->toContain('x-data="{ isBottomSheetOpen: false }"')
-        ->toContain('x-trap.noscroll.noreturn.noautofocus="isBottomSheetOpen"')
+        ->not->toContain('x-data')
+        ->not->toContain('x-trap')
         ->toContain('data-bottom-sheet-id="room"')
         ->toContain('data-bottom-sheet-until="48rem"')
         ->toContain('data-bottom-sheet-snap-points="[0.5,0.8,1]"')
@@ -58,6 +58,37 @@ it('keeps the other attributes of the section', function (): void {
     expect(openingTag(renderSection($section), 'fi-sc-section'))
         ->toContain('data-app="kept"')
         ->toContain('x-bottom-sheet.section=""');
+});
+
+it('keeps the x-data of the app on the section', function (): void {
+    $section = Section::make('Room')
+        ->id('room')
+        ->extraAttributes(['x-data' => '{ isEditing: false }'])
+        ->bottomSheet();
+
+    expect(openingTag(renderSection($section), 'fi-sc-section'))
+        ->toContain('x-data="{ isEditing: false }"')
+        ->toContain('x-bottom-sheet.section=""');
+});
+
+it('reads the condition and the options again at each render', function (): void {
+    $isSheet = true;
+    $section = Section::make('Room')
+        ->id('room')
+        ->bottomSheet(function () use (&$isSheet): bool {
+            return $isSheet;
+        });
+
+    expect(openingTag(renderSection($section), 'fi-sc-section'))->toContain('x-bottom-sheet.section=""');
+
+    $isSheet = false;
+
+    expect(openingTag(renderSection($section), 'fi-sc-section'))->not->toContain('bottom-sheet');
+
+    $isSheet = true;
+    $section->bottomSheetSnapPoints([0.7]);
+
+    expect(openingTag(renderSection($section), 'fi-sc-section'))->toContain('data-bottom-sheet-snap-points="[0.7]"');
 });
 
 it('adds no attribute when the bottom sheet is disabled', function (bool|Closure $condition): void {

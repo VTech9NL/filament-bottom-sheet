@@ -57,6 +57,24 @@ it('keeps the other modal window attributes of the action', function (): void {
         ->toContain('x-bottom-sheet=""');
 });
 
+it('reads the condition and the options again at each render', function (): void {
+    $isSheet = true;
+    $action = Action::make('edit')->bottomSheet(function () use (&$isSheet): bool {
+        return $isSheet;
+    });
+
+    expect(openingTag(renderActionModal($action), 'fi-modal-window'))->toContain('x-bottom-sheet=""');
+
+    $isSheet = false;
+
+    expect(renderActionModal($action))->not->toContain('bottom-sheet');
+
+    $isSheet = true;
+    $action->bottomSheetInitialHeight(0.8);
+
+    expect(openingTag(renderActionModal($action), 'fi-modal-window'))->toContain('data-bottom-sheet-initial-height="0.8"');
+});
+
 it('adds no attribute when the bottom sheet is disabled', function (bool|Closure $condition): void {
     $html = renderActionModal(Action::make('edit')->bottomSheet($condition)->bottomSheetSnapPoints([0.4]));
 

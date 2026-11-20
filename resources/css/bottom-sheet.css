@@ -36,4 +36,10 @@
     .fi-modal-window.fi-bottom-sheet.fi-transition-leave {
         transition: none !important;
     }
+
+    /* The backdrop of a sheet does not fade (`x-transition` of the modal). */
+    .fi-modal:has(> .fi-modal-window-ctn > .fi-bottom-sheet)
+        > .fi-modal-close-overlay {
+        transition: none !important;
+    }
 }
