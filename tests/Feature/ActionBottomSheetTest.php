@@ -160,6 +160,26 @@ it('may not combine the bottom sheet with a slide-over or no modal, in each orde
     'no modal, after' => [fn (Action $action) => $action->bottomSheet()->modal(false)],
 ]);
 
+it('puts the overlay attribute on the window only when the option is false', function (): void {
+    $off = renderActionModal(Action::make('edit')->bottomSheet()->bottomSheetOverlay(false));
+    $on = renderActionModal(Action::make('edit')->bottomSheet()->bottomSheetOverlay());
+    $plain = renderActionModal(Action::make('edit')->bottomSheet());
+
+    expect(openingTag($off, 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-overlay="false"')
+        ->and(openingTag($on, 'fi-modal-window'))
+        ->not->toContain('data-bottom-sheet-overlay')
+        ->and(openingTag($plain, 'fi-modal-window'))
+        ->not->toContain('data-bottom-sheet-overlay');
+});
+
+it('may not use the overlay option without the bottom sheet', function (): void {
+    $action = Action::make('edit')->bottomSheetOverlay(false);
+
+    expect(fn () => renderActionModal($action))
+        ->toThrow(InvalidArgumentException::class, 'without ->bottomSheet()');
+});
+
 it('may not use a window type breakpoint without the bottom sheet', function (Closure $configure): void {
     $action = $configure(Action::make('edit'));
 

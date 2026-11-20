@@ -52,6 +52,13 @@ class BottomSheetServiceProvider extends ServiceProvider
             return $this;
         });
 
+        Action::macro('bottomSheetOverlay', function (bool|Closure $condition = true): static {
+            /** @var Action $this */
+            BottomSheet::for($this)->overlay($condition);
+
+            return $this;
+        });
+
         FilamentAsset::register([
             Css::make('bottom-sheet', __DIR__.'/../resources/css/bottom-sheet.css'),
             Js::make('bottom-sheet', __DIR__.'/../resources/dist/bottom-sheet.js'),
