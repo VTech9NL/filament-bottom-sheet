@@ -118,7 +118,7 @@ Open the sheet with `$dispatch('open-bottom-sheet', { id })`. Close it with `$di
 
 While the section is a sheet, its label and its collapse button are hidden. The footer actions stay at the bottom of the sheet.
 
-The sheet sets one `x-data` on the section wrapper: `{ isBottomSheetOpen: false }`. Filament merges `extraAlpineAttributes()` onto that same element. Set no second `x-data`. One element can have only one, and the sheet value stays.
+The sheet sets no `x-data` on the section wrapper. The wrapper can have the `x-data` of the app, for example from `extraAlpineAttributes()`.
 
 ### One form, two shells
 
@@ -188,7 +188,6 @@ The breakpoint names are the Tailwind CSS v4 defaults:
 - A section sheet uses `position: fixed`. A parent with `transform`, `filter` or `contain` breaks that position. Keep the section outside such a parent.
 - A section sheet needs an `id()` or a `key()`, so the open and close events can name it.
 - A nested action stacks on a sheet only when it calls `->overlayParentActions()`.
-- Set no second `x-data` on a section sheet. The wrapper already has one, and `extraAlpineAttributes()` merge onto that element.
 - `composer serve` builds the workbench theme and starts the demo panel.
 
 ## Testing
