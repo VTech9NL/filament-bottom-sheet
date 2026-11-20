@@ -839,9 +839,9 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
     sheet.isOpen = () => modal.isOpen
 
     // Only the top sheet takes an outside tap and traps the focus. Under a
-    // newer sheet, the window container lets a tap through (the window still
-    // takes it), and the Filament focus trap stops until the sheet is on top
-    // again.
+    // newer sheet, the dark layer and the window container let a tap through
+    // (the window still takes it), and the Filament focus trap stops until
+    // the sheet is on top again.
     let isTrapHeld = false
     const setLayer = sheet.setLayer
 
@@ -849,11 +849,12 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
         setLayer(layer)
 
         const isUnder = !!layer && sheet.isActive
-        const container = root.querySelector(':scope > .fi-modal-window-ctn')
 
-        if (container) {
-            container.style.pointerEvents = isUnder ? 'none' : ''
-        }
+        root.querySelectorAll(
+            ':scope > .fi-modal-close-overlay, :scope > .fi-modal-window-ctn',
+        ).forEach((node) => {
+            node.style.pointerEvents = isUnder ? 'none' : ''
+        })
 
         el.style.pointerEvents = isUnder ? 'auto' : ''
 
