@@ -64,9 +64,9 @@ const MODAL_CLASSES = [
 
 const MODAL_BACK_CLASSES = ['scale-94']
 
-// The Filament classes of a slide-over, on the modal root
-// (`components/modal/index.blade.php`). The sticky header and footer are the
-// defaults of a Filament slide-over action.
+// The Filament classes a slide-over can set on the modal root
+// (`components/modal/index.blade.php`). The directive adds each sticky class
+// only when its data attribute is true.
 const SLIDE_OVER_CLASSES = [
     'fi-modal-slide-over',
     'fi-modal-has-sticky-header',
@@ -679,7 +679,13 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
             query: window.matchMedia(`(min-width: ${width})`),
         }))
     const slideOverClasses = [
-        ...SLIDE_OVER_CLASSES,
+        'fi-modal-slide-over',
+        ...(el.dataset.bottomSheetSlideOverStickyHeader === 'true'
+            ? ['fi-modal-has-sticky-header']
+            : []),
+        ...(el.dataset.bottomSheetSlideOverStickyFooter === 'true'
+            ? ['fi-modal-has-sticky-footer']
+            : []),
         SLIDE_OVER_POSITION_CLASSES[
             el.dataset.bottomSheetSlideOverPosition === 'start'
                 ? 'start'
@@ -817,6 +823,8 @@ const OPTION_ATTRIBUTES = [
     'data-bottom-sheet-modal-from',
     'data-bottom-sheet-slide-over-from',
     'data-bottom-sheet-slide-over-position',
+    'data-bottom-sheet-slide-over-sticky-header',
+    'data-bottom-sheet-slide-over-sticky-footer',
     'data-bottom-sheet-snap-points',
     'data-bottom-sheet-initial-height',
 ]

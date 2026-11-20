@@ -211,6 +211,10 @@ final class BottomSheet
         if ($this->slideOverFrom !== null) {
             $options['data-bottom-sheet-slide-over-from'] = self::BREAKPOINTS[$this->slideOverFrom];
             $options['data-bottom-sheet-slide-over-position'] = ($action->getModalSlideOverPosition() ?? SlideOverPosition::End)->value;
+            // A Filament slide-over uses the action setting, or true when the
+            // action has no setting. The properties are protected.
+            $options['data-bottom-sheet-slide-over-sticky-header'] = self::slideOverSticky($action, 'header');
+            $options['data-bottom-sheet-slide-over-sticky-footer'] = self::slideOverSticky($action, 'footer');
         }
 
         return [
@@ -218,6 +222,23 @@ final class BottomSheet
             'data-bottom-sheet-snap-points' => (string) json_encode($this->snapPoints),
             'data-bottom-sheet-initial-height' => (string) $this->initialHeight,
         ];
+    }
+
+    /**
+     * The sticky value of the slide-over type: the action setting, or true.
+     */
+    private static function slideOverSticky(Action $action, string $part): string
+    {
+        $setting = Closure::bind(
+            match ($part) {
+                'header' => fn (): bool|Closure|null => $this->isModalHeaderSticky,
+                'footer' => fn (): bool|Closure|null => $this->isModalFooterSticky,
+            },
+            $action,
+            $action,
+        )();
+
+        return ((bool) ($action->evaluate($setting) ?? true)) ? 'true' : 'false';
     }
 
     /**
