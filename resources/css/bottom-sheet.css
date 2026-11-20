@@ -1,7 +1,7 @@
 /*
  * Only what a Tailwind utility cannot do. Each rule is scoped to
  * `.fi-bottom-sheet`, which the `x-bottom-sheet` directive puts on a modal
- * window below the breakpoint only.
+ * window only while its window type is the sheet.
  *
  * Filament's modal enter and leave classes scale and fade the window. A sheet
  * does not: the directive moves it up with a spring when it opens, and these

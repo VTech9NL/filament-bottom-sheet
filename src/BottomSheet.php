@@ -6,13 +6,17 @@ namespace VTech9NL\BottomSheet;
 
 use Closure;
 use Filament\Actions\Action;
-use Filament\Schemas\Components\Section;
+use Filament\Support\Enums\SlideOverPosition;
 use InvalidArgumentException;
 use WeakMap;
 
 /**
- * The bottom sheet options of one action or section, and the attributes that
- * the `x-bottom-sheet` Alpine directive reads from the rendered markup.
+ * The bottom sheet options of one action, and the attributes that the
+ * `x-bottom-sheet` Alpine directive reads from the rendered markup.
+ *
+ * The bottom sheet is the window type of the action at each width. From the
+ * breakpoint of `modalFrom()` or `slideOverFrom()` and up, the directive
+ * shows the same window as the Filament modal or slide-over.
  */
 final class BottomSheet
 {
@@ -29,24 +33,6 @@ final class BottomSheet
         '2xl' => '96rem',
     ];
 
-    public const string DEFAULT_UNTIL = 'md';
-
-    /**
-     * Tailwind utilities that hide a section sheet below the breakpoint
-     * before Alpine starts. The directive removes the class when it takes
-     * over. Each name is a literal, so a panel theme `@source` of this file
-     * finds it.
-     *
-     * @var array<string, string>
-     */
-    public const array HIDDEN_BELOW = [
-        'sm' => 'max-sm:hidden',
-        'md' => 'max-md:hidden',
-        'lg' => 'max-lg:hidden',
-        'xl' => 'max-xl:hidden',
-        '2xl' => 'max-2xl:hidden',
-    ];
-
     /**
      * @var list<float>
      */
@@ -58,16 +44,20 @@ final class BottomSheet
 
     public const string PART_MODAL_OVERLAY = 'modal-overlay';
 
-    public const string PART_SECTION = 'section';
+    public const string PART_TRIGGER = 'trigger';
 
     /**
-     * @var WeakMap<Action|Section, self>|null
+     * @var WeakMap<Action, self>|null
      */
     private static ?WeakMap $sheets = null;
 
     private bool|Closure $condition = false;
 
-    private string $until = self::DEFAULT_UNTIL;
+    private bool $isCalled = false;
+
+    private ?string $modalFrom = null;
+
+    private ?string $slideOverFrom = null;
 
     /**
      * @var list<float>
@@ -77,36 +67,35 @@ final class BottomSheet
     private float|string $initialHeight = self::CONTENT_HEIGHT;
 
     /**
-     * Give the options of the component. The first call attaches the
-     * attributes to the component, as lazy closures, so the order of the
-     * macro calls does not matter.
+     * Give the options of the action. The first call attaches the
+     * attributes to the action, as lazy closures, so the order of the macro
+     * calls does not matter.
      */
-    public static function for(Action|Section $component): self
+    public static function for(Action $action): self
     {
         self::$sheets ??= new WeakMap;
 
-        if (isset(self::$sheets[$component])) {
-            return self::$sheets[$component];
+        if (isset(self::$sheets[$action])) {
+            return self::$sheets[$action];
         }
 
         $sheet = new self;
-        self::$sheets[$component] = $sheet;
+        self::$sheets[$action] = $sheet;
 
-        if ($component instanceof Action) {
-            $component->extraModalWindowAttributes(
-                fn (Action $action): array => $sheet->attributes(self::PART_MODAL_WINDOW, $action),
-                merge: true,
-            );
-            $component->extraModalOverlayAttributes(
-                fn (Action $action): array => $sheet->attributes(self::PART_MODAL_OVERLAY, $action),
-                merge: true,
-            );
-        } else {
-            $component->extraAttributes(
-                fn (Section $section): array => $sheet->attributes(self::PART_SECTION, $section),
-                merge: true,
-            );
-        }
+        $action->extraModalWindowAttributes(
+            fn (Action $action): array => $sheet->attributes(self::PART_MODAL_WINDOW, $action),
+            merge: true,
+        );
+        $action->extraModalOverlayAttributes(
+            fn (Action $action): array => $sheet->attributes(self::PART_MODAL_OVERLAY, $action),
+            merge: true,
+        );
+        // An action without a modal renders no window: its trigger button
+        // checks the conflicts.
+        $action->extraAttributes(
+            fn (Action $action): array => $sheet->attributes(self::PART_TRIGGER, $action),
+            merge: true,
+        );
 
         return $sheet;
     }
@@ -114,21 +103,21 @@ final class BottomSheet
     public function enabled(bool|Closure $condition = true): self
     {
         $this->condition = $condition;
+        $this->isCalled = true;
 
         return $this;
     }
 
-    public function until(string $breakpoint): self
+    public function modalFrom(string $breakpoint): self
     {
-        if (! array_key_exists($breakpoint, self::BREAKPOINTS)) {
-            throw new InvalidArgumentException(sprintf(
-                'The bottom sheet breakpoint [%s] is not one of [%s].',
-                $breakpoint,
-                implode(', ', array_keys(self::BREAKPOINTS)),
-            ));
-        }
+        $this->modalFrom = self::ensureBreakpoint($breakpoint, $this->slideOverFrom);
 
-        $this->until = $breakpoint;
+        return $this;
+    }
+
+    public function slideOverFrom(string $breakpoint): self
+    {
+        $this->slideOverFrom = self::ensureBreakpoint($breakpoint, $this->modalFrom);
 
         return $this;
     }
@@ -183,9 +172,11 @@ final class BottomSheet
      *
      * @return array<string, string>
      */
-    public function attributes(string $part, Action|Section $component): array
+    public function attributes(string $part, Action $action): array
     {
-        if (! $component->evaluate($this->condition)) {
+        $this->ensureNoConflict($action);
+
+        if (! $action->evaluate($this->condition)) {
             return [];
         }
 
@@ -196,22 +187,12 @@ final class BottomSheet
             self::PART_MODAL_WINDOW => [
                 'x-bottom-sheet' => '',
                 'wire:ignore.self' => '',
-                ...$this->options(),
+                ...$this->options($action),
             ],
             self::PART_MODAL_OVERLAY => [
                 'data-bottom-sheet-overlay' => '',
             ],
-            self::PART_SECTION => [
-                // Hide the section below the breakpoint from the first paint.
-                // The directive removes this class when it takes over.
-                'class' => self::HIDDEN_BELOW[$this->until],
-                // No `x-data`: the directive keeps the sheet state, the focus
-                // trap and the scroll lock, so the app can use `x-data` here.
-                'x-bottom-sheet.section' => '',
-                'wire:ignore.self' => '',
-                'data-bottom-sheet-id' => $this->sectionId($component),
-                ...$this->options(),
-            ],
+            self::PART_TRIGGER => [],
             default => throw new InvalidArgumentException("The bottom sheet part [{$part}] does not exist."),
         };
     }
@@ -219,24 +200,66 @@ final class BottomSheet
     /**
      * @return array<string, string>
      */
-    private function options(): array
+    private function options(Action $action): array
     {
+        $options = [];
+
+        if ($this->modalFrom !== null) {
+            $options['data-bottom-sheet-modal-from'] = self::BREAKPOINTS[$this->modalFrom];
+        }
+
+        if ($this->slideOverFrom !== null) {
+            $options['data-bottom-sheet-slide-over-from'] = self::BREAKPOINTS[$this->slideOverFrom];
+            $options['data-bottom-sheet-slide-over-position'] = ($action->getModalSlideOverPosition() ?? SlideOverPosition::End)->value;
+        }
+
         return [
-            'data-bottom-sheet-until' => self::BREAKPOINTS[$this->until],
+            ...$options,
             'data-bottom-sheet-snap-points' => (string) json_encode($this->snapPoints),
             'data-bottom-sheet-initial-height' => (string) $this->initialHeight,
         ];
     }
 
-    private function sectionId(Action|Section $section): string
+    /**
+     * The macros can be called in each order, so the conflicts are checked
+     * when the attributes are read.
+     */
+    private function ensureNoConflict(Action $action): void
     {
-        $id = $section instanceof Section ? $section->getId() : null;
-
-        if (blank($id)) {
-            throw new InvalidArgumentException('A section bottom sheet needs an id() or a key(), for the open-bottom-sheet event.');
+        if (! $this->isCalled && ($this->modalFrom !== null || $this->slideOverFrom !== null)) {
+            throw new InvalidArgumentException(sprintf(
+                'The action [%s] uses ->modalFrom() or ->slideOverFrom() without ->bottomSheet().',
+                $action->getName(),
+            ));
         }
 
-        return $id;
+        if (! $action->evaluate($this->condition)) {
+            return;
+        }
+
+        if ($action->isModalSlideOver() || $action->hasModal() === false) {
+            throw new InvalidArgumentException(sprintf(
+                'The bottom sheet action [%s] cannot use ->slideOver() or ->modal(false): use ->slideOverFrom() or ->modalFrom().',
+                $action->getName(),
+            ));
+        }
+    }
+
+    private static function ensureBreakpoint(string $breakpoint, ?string $other): string
+    {
+        if (! array_key_exists($breakpoint, self::BREAKPOINTS)) {
+            throw new InvalidArgumentException(sprintf(
+                'The bottom sheet breakpoint [%s] is not one of [%s].',
+                $breakpoint,
+                implode(', ', array_keys(self::BREAKPOINTS)),
+            ));
+        }
+
+        if ($breakpoint === $other) {
+            throw new InvalidArgumentException("The bottom sheet cannot use the breakpoint [{$breakpoint}] for ->modalFrom() and ->slideOverFrom().");
+        }
+
+        return $breakpoint;
     }
 
     private static function ensureViewportPart(mixed $value, string $name): void

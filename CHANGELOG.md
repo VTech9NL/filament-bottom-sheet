@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.2.0 - unreleased
+
+The bottom sheet is the mobile-first window type of a Filament action.
+
+### Breaking
+
+- The section sheet is removed: `->bottomSheet()` on a `Section`, and the `open-bottom-sheet` and `close-bottom-sheet` events.
+- The `$until` argument of `->bottomSheet()` is removed, with its short form `->bottomSheet('lg')`. Use `->bottomSheet()->modalFrom('lg')`.
+- `->bottomSheet()` alone is a sheet at each width.
+
+### Added
+
+- `->modalFrom($breakpoint)`: from the breakpoint and up, the action is the Filament modal.
+- `->slideOverFrom($breakpoint)`: from the breakpoint and up, the action is a Filament slide-over.
+- A resize changes the window type of an open action, with no close and no loss of the form data.
+- Conflict checks: `->bottomSheet()` with `->slideOver()` or `->modal(false)`, `->modalFrom()` or `->slideOverFrom()` without `->bottomSheet()`, and one breakpoint for the two types throw an `InvalidArgumentException`.
+
 ## v0.1.0 - 2026-11-20
 
 First release.

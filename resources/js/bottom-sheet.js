@@ -1,16 +1,14 @@
 /**
  * The `x-bottom-sheet` Alpine directive.
  *
- * Below the breakpoint, it turns a Filament modal window, or a schema section
- * (`x-bottom-sheet.section`), into a native bottom sheet. At and above the
- * breakpoint, it does nothing.
+ * It gives a Filament modal window one of three window types at each width:
+ * a native bottom sheet (the default), the Filament modal (from the
+ * `data-bottom-sheet-modal-from` width) or the Filament slide-over (from the
+ * `data-bottom-sheet-slide-over-from` width). A resize changes the type of an
+ * open window, with no close: it is the same window and the same form.
  *
- * For a modal, Filament keeps the modal itself: open and close, the scroll
- * lock, the focus trap, Escape, the backdrop tap and the nested modal stack
- * (`modal.js`). A section has no modal, so the directive opens and closes it
- * on the `open-bottom-sheet` and `close-bottom-sheet` window events, binds the
- * Alpine focus plugin (`x-trap`) to trap the focus, and locks the page scroll.
- * It needs no `x-data` of its own, so the app can keep its `x-data` there.
+ * Filament keeps the modal itself: open and close, the scroll lock, the focus
+ * trap, Escape, the backdrop tap and the nested modal stack (`modal.js`).
  */
 
 // The classes are literal strings, so the Tailwind build of the panel theme
@@ -66,83 +64,25 @@ const MODAL_CLASSES = [
 
 const MODAL_BACK_CLASSES = ['scale-94']
 
-// The section root is the backdrop, and its `<section>` is the sheet. The
-// sheet height and offset are settings on the root, because Livewire updates
-// the attributes of the `<section>`.
-const SECTION_CLASSES = [
-    'fi-bottom-sheet',
-    'fixed',
-    'inset-0',
-    'z-40',
-    'm-0',
-    // The root takes the focus when the sheet opens, as the modal root does.
-    'outline-none',
-    'transition-colors',
-    'duration-300',
-    'motion-reduce:transition-none',
-    'data-open:bg-gray-950/50',
-    'dark:data-open:bg-gray-950/75',
-    // Only the section shows, not its label or the schemas around it.
-    '[&>:not(.fi-section)]:hidden',
-    '[&>.fi-section]:absolute',
-    '[&>.fi-section]:inset-x-0',
-    '[&>.fi-section]:bottom-0',
-    '[&>.fi-section]:flex',
-    '[&>.fi-section]:flex-col',
-    '[&>.fi-section]:h-(--bottom-sheet-height)',
-    '[&>.fi-section]:max-h-dvh',
-    '[&>.fi-section]:translate-y-(--bottom-sheet-offset)',
-    '[&>.fi-section]:overflow-hidden',
-    '[&>.fi-section]:rounded-t-2xl',
-    '[&>.fi-section]:rounded-b-none',
-    '[&>.fi-section]:bg-white',
-    'dark:[&>.fi-section]:bg-gray-900',
-    '[&>.fi-section]:shadow-xl',
-    '[&>.fi-section]:pb-[env(safe-area-inset-bottom)]',
-    '[&>.fi-section]:will-change-transform',
-    '[&>.fi-section]:origin-bottom',
-    '[&>.fi-section]:transition-[scale]',
-    '[&>.fi-section]:duration-300',
-    '[&>.fi-section]:motion-reduce:transition-none',
-    // The drag handle.
-    '[&>.fi-section]:before:mx-auto',
-    '[&>.fi-section]:before:mt-2',
-    '[&>.fi-section]:before:block',
-    '[&>.fi-section]:before:h-1.5',
-    '[&>.fi-section]:before:w-10',
-    '[&>.fi-section]:before:shrink-0',
-    '[&>.fi-section]:before:rounded-full',
-    '[&>.fi-section]:before:bg-gray-300',
-    'dark:[&>.fi-section]:before:bg-gray-600',
-    // The header stays at the top and moves the sheet.
-    '[&>.fi-section>.fi-section-header]:shrink-0',
-    '[&>.fi-section>.fi-section-header]:touch-none',
-    '[&>.fi-section>.fi-section-header]:select-none',
-    // No collapse button while it is a sheet.
-    '[&_.fi-section-collapse-btn]:hidden',
-    // The body scrolls, and the footer actions stay at the bottom.
-    '[&>.fi-section>.fi-section-content-ctn]:flex',
-    '[&>.fi-section>.fi-section-content-ctn]:min-h-0',
-    '[&>.fi-section>.fi-section-content-ctn]:flex-1',
-    '[&>.fi-section>.fi-section-content-ctn]:flex-col',
-    '[&_.fi-section-content-ctn>.fi-section-content]:min-h-0',
-    '[&_.fi-section-content-ctn>.fi-section-content]:flex-1',
-    '[&_.fi-section-content-ctn>.fi-section-content]:overflow-y-auto',
-    '[&_.fi-section-content-ctn>.fi-section-content]:overscroll-contain',
-    '[&_.fi-section-content-ctn>.fi-section-footer]:shrink-0',
+// The Filament classes of a slide-over, on the modal root
+// (`components/modal/index.blade.php`). The sticky header and footer are the
+// defaults of a Filament slide-over action.
+const SLIDE_OVER_CLASSES = [
+    'fi-modal-slide-over',
+    'fi-modal-has-sticky-header',
+    'fi-modal-has-sticky-footer',
 ]
 
-const SECTION_BACK_CLASSES = ['[&>.fi-section]:scale-94']
+const SLIDE_OVER_POSITION_CLASSES = {
+    start: 'fi-modal-slide-over-from-start',
+    end: 'fi-modal-slide-over-from-end',
+}
 
-// Hides a section sheet below the breakpoint before Alpine starts. The names
-// match `BottomSheet::HIDDEN_BELOW`. The directive removes the class when it
-// takes over, and then it hides the section itself.
-const SECTION_CLOAK_CLASSES = [
-    'max-sm:hidden',
-    'max-md:hidden',
-    'max-lg:hidden',
-    'max-xl:hidden',
-    'max-2xl:hidden',
+// The root classes that the window type changes. In the other types, the
+// root keeps these classes as the server renders them.
+const TYPE_CLASSES = [
+    ...SLIDE_OVER_CLASSES,
+    ...Object.values(SLIDE_OVER_POSITION_CLASSES),
 ]
 
 // The part of the viewport height at which the sheet opens when the content
@@ -211,59 +151,7 @@ const removeSheet = (sheet) => {
 
 const isTopmostSheet = (sheet) => stack[stack.length - 1] === sheet
 
-// One Escape closes one sheet: the sheet that is topmost when the key event
-// starts. The plugin adds this listener before Alpine starts, so it runs before
-// the Escape listeners of the Filament modals. A modal sheet closes with its
-// Filament modal; a section sheet stops the event, so the modal under it stays
-// open.
-const onEscape = (event) => {
-    if (event.key === 'Escape' && !event.defaultPrevented) {
-        stack[stack.length - 1]?.onEscape?.(event)
-    }
-}
-
-// The section sheets lock the page scroll on `<body>`. The Filament modals lock
-// it on `<html>` (`modal.js`). Each lock restores only its own element, so a
-// close or a breakpoint change releases only its own lock, and the page scrolls
-// again only when no lock is left.
-let scrollLocks = 0
-let restoreScroll = null
-
-const lockScroll = () => {
-    if (scrollLocks++ > 0) {
-        return
-    }
-
-    const { style } = document.body
-    const { overflow, paddingRight } = style
-    const html = document.documentElement
-    const scrollbarWidth = window.innerWidth - html.clientWidth
-    const gutter = window.getComputedStyle(html).scrollbarGutter
-
-    style.overflow = 'hidden'
-
-    // A reserved scrollbar gutter already keeps the page width.
-    if (scrollbarWidth > 0 && (!gutter || gutter === 'auto')) {
-        style.paddingRight = `${scrollbarWidth}px`
-    }
-
-    restoreScroll = () => {
-        style.overflow = overflow
-        style.paddingRight = paddingRight
-    }
-}
-
-const unlockScroll = () => {
-    if (scrollLocks === 0 || --scrollLocks > 0) {
-        return
-    }
-
-    restoreScroll?.()
-    restoreScroll = null
-}
-
 const readOptions = (el) => ({
-    until: el.dataset.bottomSheetUntil || '48rem',
     snapPoints: JSON.parse(el.dataset.bottomSheetSnapPoints || '[0.5,0.8,1]'),
     initialHeight:
         el.dataset.bottomSheetInitialHeight === 'content'
@@ -272,30 +160,8 @@ const readOptions = (el) => ({
               FALLBACK_HEIGHT,
 })
 
-// Give the focus back to the element that had it before the section sheet
-// opened, when the focus is not in an other open part now.
-const restoreFocus = (opener, container) => {
-    if (!opener?.isConnected) {
-        return
-    }
-
-    requestAnimationFrame(() => {
-        const active = document.activeElement
-
-        if (
-            active &&
-            active !== document.body &&
-            !container.contains(active)
-        ) {
-            return
-        }
-
-        opener.focus({ preventScroll: true })
-    })
-}
-
 /**
- * The sheet motion and the drag, shared by the modal and the section sheets.
+ * The sheet motion and the drag.
  *
  * The part gives:
  * - `host`: the element with `wire:ignore.self`, that gets the classes;
@@ -311,16 +177,12 @@ const restoreFocus = (opener, container) => {
 const createSheet = (part) => {
     const { host } = part
     const options = readOptions(host)
-    const breakpoint = window.matchMedia(
-        `not all and (min-width: ${options.until})`,
-    )
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
     const sheet = {
         isActive: false,
         // The visible height of the sheet, in px.
         position: 0,
-        breakpoint,
     }
 
     // The heights where the sheet can rest, in px, from low to high.
@@ -442,7 +304,7 @@ const createSheet = (part) => {
         stop()
         part.render(null, '100%')
 
-        // Wait for `x-show` (or the section) to show the sheet, so its height
+        // Wait for `x-show` to show the sheet, so its height
         // can be measured.
         let tries = 0
 
@@ -473,7 +335,7 @@ const createSheet = (part) => {
         )
 
     // Put the sheet at a rest point with no animation, for example after a
-    // resize across the breakpoint while it is open.
+    // resize to the sheet type while it is open.
     sheet.place = () => {
         stop()
 
@@ -803,10 +665,77 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
     })
 
     sheet.isOpen = () => modal.isOpen
-    sheet.modal = root
 
-    const onBreakpointChange = () => {
-        if (!sheet.breakpoint.matches) {
+    // The window types from a breakpoint, from the widest breakpoint to the
+    // narrowest. Below each breakpoint, the window is a sheet.
+    const types = [
+        ['modal', el.dataset.bottomSheetModalFrom],
+        ['slideOver', el.dataset.bottomSheetSlideOverFrom],
+    ]
+        .filter(([, width]) => width)
+        .sort(([, a], [, b]) => parseFloat(b) - parseFloat(a))
+        .map(([name, width]) => ({
+            name,
+            query: window.matchMedia(`(min-width: ${width})`),
+        }))
+    const slideOverClasses = [
+        ...SLIDE_OVER_CLASSES,
+        SLIDE_OVER_POSITION_CLASSES[
+            el.dataset.bottomSheetSlideOverPosition === 'start'
+                ? 'start'
+                : 'end'
+        ],
+    ]
+
+    // The type classes of the root, as the server renders them.
+    let serverClasses = TYPE_CLASSES.filter((name) =>
+        root.classList.contains(name),
+    )
+    let type = null
+
+    const currentType = () =>
+        types.find(({ query }) => query.matches)?.name ?? 'sheet'
+
+    const applyType = (target) => {
+        const names = type === 'slideOver' ? slideOverClasses : serverClasses
+
+        TYPE_CLASSES.forEach((name) =>
+            target.classList.toggle(name, names.includes(name)),
+        )
+    }
+
+    // The root has no `wire:ignore.self`, and Filament updates the action
+    // modals with its own morph (`partials.js`), with no Livewire morph hook.
+    // When an update gives the root its server classes again, the observer
+    // keeps them as the server state and gives the slide-over classes again,
+    // before the next paint.
+    const observer = new MutationObserver(() => {
+        const current = TYPE_CLASSES.filter((name) =>
+            root.classList.contains(name),
+        )
+
+        if (type !== 'slideOver') {
+            serverClasses = current
+        } else if (
+            current.length !== slideOverClasses.length ||
+            !slideOverClasses.every((name) => current.includes(name))
+        ) {
+            serverClasses = current
+            applyType(root)
+        }
+    })
+
+    const onTypeChange = () => {
+        const next = currentType()
+
+        if (next === type) {
+            return
+        }
+
+        type = next
+        applyType(root)
+
+        if (type !== 'sheet') {
             sheet.deactivate()
 
             return
@@ -826,10 +755,16 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
         !sheet.isDragging() &&
         sheet.place()
 
-    sheet.breakpoint.addEventListener('change', onBreakpointChange)
+    types.forEach(({ query }) =>
+        query.addEventListener('change', onTypeChange),
+    )
     window.addEventListener('resize', onResize)
 
-    if (sheet.breakpoint.matches) {
+    type = currentType()
+    applyType(root)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+
+    if (type === 'sheet') {
         sheet.activate()
     }
 
@@ -863,263 +798,42 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
 
         Alpine.release(visibility)
         sheet.destroy()
-        sheet.breakpoint.removeEventListener('change', onBreakpointChange)
-        window.removeEventListener('resize', onResize)
-
-        return { wasOpen: false, index }
-    }
-}
-
-const createSectionSheet = (Alpine, el, isRestart = false) => {
-    const id = el.dataset.bottomSheetId
-    const section = () => el.querySelector(':scope > .fi-section')
-    // The state of the focus trap. The directive keeps it, so the section
-    // needs no `x-data`.
-    const trap = Alpine.reactive({ isActive: false })
-    const removeTrap = Alpine.bind(el, {
-        'x-trap.noreturn.noautofocus': () => trap.isActive,
-    })
-
-    let isOpen = false
-    let isLocked = false
-    let opener = null
-
-    const sheet = createSheet({
-        host: el,
-        sheet: section,
-        content: () =>
-            el.querySelector(
-                ':scope > .fi-section > .fi-section-content-ctn > .fi-section-content',
-            ),
-        footerSelector: '.fi-section-footer',
-        classes: SECTION_CLASSES,
-        backClasses: SECTION_BACK_CLASSES,
-        layers: () => [el],
-        render: (height, offset) => {
-            if (height !== null) {
-                el.style.setProperty(
-                    '--bottom-sheet-height',
-                    height === 'auto' ? 'auto' : `${height}px`,
-                )
-            }
-
-            el.style.setProperty(
-                '--bottom-sheet-offset',
-                typeof offset === 'number' ? `${offset}px` : offset,
-            )
-        },
-        clear: () => {
-            el.style.removeProperty('--bottom-sheet-height')
-            el.style.removeProperty('--bottom-sheet-offset')
-        },
-        isShown: () => isOpen,
-        requestClose: () => close(),
-    })
-
-    sheet.isOpen = () => isOpen
-
-    const setLocked = (shouldLock) => {
-        if (shouldLock !== isLocked) {
-            isLocked = shouldLock
-            shouldLock ? lockScroll() : unlockScroll()
-        }
-    }
-
-    const setDialog = (isDialog) => {
-        const heading = section()?.getAttribute('aria-labelledby')
-
-        if (isDialog) {
-            el.setAttribute('role', 'dialog')
-            el.setAttribute('aria-modal', 'true')
-            el.setAttribute('tabindex', '-1')
-
-            if (heading) {
-                el.setAttribute('aria-labelledby', heading)
-            }
-
-            return
-        }
-
-        for (const name of [
-            'role',
-            'aria-modal',
-            'tabindex',
-            'aria-labelledby',
-        ]) {
-            el.removeAttribute(name)
-        }
-    }
-
-    // Hide the section until it opens again, and give the focus back to the
-    // opening button.
-    const hide = () => {
-        isOpen = false
-        trap.isActive = false
-        setLocked(false)
-        delete el.dataset.open
-        el.classList.add('hidden')
-        setDialog(false)
-        removeSheet(sheet)
-
-        if (opener) {
-            restoreFocus(opener, el)
-            opener = null
-        }
-    }
-
-    const open = () => {
-        if (!sheet.isActive || isOpen) {
-            return
-        }
-
-        const active = document.activeElement
-
-        opener = active && !el.contains(active) ? active : null
-        isOpen = true
-        setLocked(true)
-        el.classList.remove('hidden')
-        setDialog(true)
-        pushSheet(sheet)
-        sheet.open()
-
-        requestAnimationFrame(() => {
-            if (!isOpen) {
-                return
-            }
-
-            el.dataset.open = ''
-            trap.isActive = true
-            Alpine.nextTick(() => isOpen && el.focus({ preventScroll: true }))
-        })
-    }
-
-    const close = (velocity = 0) => {
-        if (!sheet.isActive || !isOpen) {
-            return
-        }
-
-        // The backdrop fades while the sheet moves down.
-        delete el.dataset.open
-        removeSheet(sheet)
-        sheet.slideOut(velocity, hide)
-    }
-
-    const isForThisSheet = (event) => event.detail?.id === id
-
-    const onOpen = (event) => isForThisSheet(event) && open()
-
-    const onClose = (event) => isForThisSheet(event) && close()
-
-    // A Filament modal that is not a sheet (for example at its own breakpoint)
-    // closes with Escape first, as before.
-    const hasOtherModal = () =>
-        [...document.querySelectorAll('.fi-modal-open')].some(
-            (modal) => !stack.some((other) => other.modal === modal),
+        types.forEach(({ query }) =>
+            query.removeEventListener('change', onTypeChange),
         )
-
-    sheet.onEscape = (event) => {
-        if (!isOpen || hasOtherModal()) {
-            return
-        }
-
-        event.stopImmediatePropagation()
-        close()
-    }
-
-    // A tap on the backdrop, the root itself, closes the sheet.
-    const onClick = (event) =>
-        event.target === el && isOpen && isTopmostSheet(sheet) && close()
-
-    const activate = () => {
-        sheet.activate()
-        el.classList.add('hidden')
-    }
-
-    const deactivate = () => {
-        const wasOpen = isOpen
-
-        isOpen = false
-        opener = null
-        trap.isActive = false
-        setLocked(false)
-        delete el.dataset.open
-        el.classList.remove('hidden')
-        setDialog(false)
-        sheet.deactivate()
-
-        // The section shows in its place again, and its root is no longer
-        // a dialog that can have the focus.
-        if (wasOpen && document.activeElement === el) {
-            el.blur()
-        }
-
-        return wasOpen
-    }
-
-    const onBreakpointChange = () =>
-        sheet.breakpoint.matches ? activate() : deactivate()
-
-    const onResize = () =>
-        sheet.isActive && isOpen && !sheet.isDragging() && sheet.place()
-
-    window.addEventListener('open-bottom-sheet', onOpen)
-    window.addEventListener('close-bottom-sheet', onClose)
-    window.addEventListener('resize', onResize)
-    el.addEventListener('click', onClick)
-    sheet.breakpoint.addEventListener('change', onBreakpointChange)
-
-    if (sheet.breakpoint.matches) {
-        // `hidden` is set first, so the section stays hidden when the
-        // first-paint class is removed.
-        activate()
-
-        // New options while the sheet is open: it stays open.
-        if (isRestart) {
-            open()
-        }
-    }
-
-    el.classList.remove(...SECTION_CLOAK_CLASSES)
-
-    return () => {
-        const index = stack.indexOf(sheet)
-        const wasOpen = deactivate()
-
-        sheet.destroy()
-        removeTrap()
-        window.removeEventListener('open-bottom-sheet', onOpen)
-        window.removeEventListener('close-bottom-sheet', onClose)
         window.removeEventListener('resize', onResize)
-        el.removeEventListener('click', onClick)
-        sheet.breakpoint.removeEventListener('change', onBreakpointChange)
 
-        return { wasOpen, index }
+        // The root gets its server classes again.
+        observer.disconnect()
+        type = null
+        applyType(root)
+
+        return { index }
     }
 }
 
 // The attributes of `BottomSheet::attributes()` that the directive reads.
 const OPTION_ATTRIBUTES = [
-    'data-bottom-sheet-id',
-    'data-bottom-sheet-until',
+    'data-bottom-sheet-modal-from',
+    'data-bottom-sheet-slide-over-from',
+    'data-bottom-sheet-slide-over-position',
     'data-bottom-sheet-snap-points',
     'data-bottom-sheet-initial-height',
 ]
 
 // The sheet state of the markup: null when the element is not a sheet.
-const stateOf = (el, directive) =>
-    el.hasAttribute(directive)
+const stateOf = (el) =>
+    el.hasAttribute('x-bottom-sheet')
         ? OPTION_ATTRIBUTES.map((name) => el.getAttribute(name)).join('|')
         : null
 
 // `wire:ignore.self` keeps the classes and styles of the directive, so a
-// Livewire update does not change the attributes of the host. Before each
+// Livewire update does not change the attributes of the window. Before each
 // update, the directive compares the new markup with its state: when the
 // condition or an option changes, it starts again with the new state.
 const onMorph = ({ el, toEl }) => el._bottomSheetSync?.(toEl)
 
 const plugin = (Alpine) => {
-    window.addEventListener('keydown', onEscape)
-
     if (window.Livewire) {
         window.Livewire.hook('morph.updating', onMorph)
     } else {
@@ -1133,30 +847,24 @@ const plugin = (Alpine) => {
     // to the window events, so the directive skips the clones.
     Alpine.directive(
         'bottom-sheet',
-        Alpine.skipDuringClone((el, { modifiers }, { cleanup }) => {
+        Alpine.skipDuringClone((el, _directive, { cleanup }) => {
             if (!el.isConnected) {
                 return
             }
 
-            const isSection = modifiers.includes('section')
-            const directive = isSection
-                ? 'x-bottom-sheet.section'
-                : 'x-bottom-sheet'
-            const create = isSection ? createSectionSheet : createModalSheet
-
-            let state = stateOf(el, directive)
-            let destroy = create(Alpine, el)
+            let state = stateOf(el)
+            let destroy = createModalSheet(Alpine, el)
 
             el.__livewire_ignore_self = true
 
             el._bottomSheetSync = (toEl) => {
-                const next = stateOf(toEl, directive)
+                const next = stateOf(toEl)
 
                 if (next === state) {
                     return
                 }
 
-                const { wasOpen, index = -1 } = destroy?.() ?? {}
+                const { index = -1 } = destroy?.() ?? {}
 
                 destroy = null
                 state = next
@@ -1177,7 +885,7 @@ const plugin = (Alpine) => {
 
                 el.__livewire_ignore_self = true
                 restartIndex = index === -1 ? null : index
-                destroy = create(Alpine, el, isSection ? wasOpen : true)
+                destroy = createModalSheet(Alpine, el, true)
                 restartIndex = null
             }
 
