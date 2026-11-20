@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.0 - unreleased
+## v0.2.0 - 2026-11-21
 
 The bottom sheet is the mobile-first window type of a Filament action.
 
