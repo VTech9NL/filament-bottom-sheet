@@ -183,7 +183,12 @@ final class BottomSheet
                 'data-bottom-sheet-overlay' => '',
             ],
             self::PART_SECTION => [
+                // The state of the focus trap and the page scroll lock of the
+                // Alpine focus plugin, which the directive sets.
+                'x-data' => '{ isBottomSheetOpen: false }',
+                'x-trap.noscroll.noreturn.noautofocus' => 'isBottomSheetOpen',
                 'x-bottom-sheet.section' => '',
+                'wire:ignore.self' => '',
                 'data-bottom-sheet-id' => $this->sectionId($component),
                 ...$this->options(),
             ],

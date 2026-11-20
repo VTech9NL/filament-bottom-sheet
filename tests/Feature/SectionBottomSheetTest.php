@@ -9,6 +9,9 @@ it('marks the section as a bottom sheet with its id and the default options', fu
 
     expect(openingTag($html, 'fi-sc-section'))
         ->toContain('x-bottom-sheet.section=""')
+        ->toContain('wire:ignore.self=""')
+        ->toContain('x-data="{ isBottomSheetOpen: false }"')
+        ->toContain('x-trap.noscroll.noreturn.noautofocus="isBottomSheetOpen"')
         ->toContain('data-bottom-sheet-id="room"')
         ->toContain('data-bottom-sheet-until="48rem"')
         ->toContain('data-bottom-sheet-snap-points="[0.5,0.8,1]"')
