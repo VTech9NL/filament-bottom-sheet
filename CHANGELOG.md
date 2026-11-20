@@ -28,6 +28,7 @@ The bottom sheet is the mobile-first window type of a Filament action.
 - `->modalFrom($breakpoint)`: from the breakpoint and up, the action is the Filament modal.
 - `->slideOverFrom($breakpoint)`: from the breakpoint and up, the action is a Filament slide-over.
 - A resize changes the window type of an open action, with no close and no loss of the form data.
+- With two sheets open, only the top sheet takes an outside tap, Escape and the focus. A sheet under it lets a tap through and does not trap the focus.
 - A snap point or a first height must be finite.
 - Conflict checks: `->bottomSheet()` with `->slideOver()` or `->modal(false)`, `->modalFrom()`, `->slideOverFrom()` or `->bottomSheetOverlay()` without `->bottomSheet()`, and one breakpoint for the two types throw an `InvalidArgumentException`.
 
