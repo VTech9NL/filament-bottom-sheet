@@ -234,6 +234,9 @@ const readOptions = (el) => ({
  * - `layers()`: the elements that get the stack layer (`z-index`);
  * - `isShown()`: the sheet element is shown;
  * - `requestClose()`: close the part, as the user asks for it.
+ *
+ * `sheet.reason` is the cause of the last motion: `drag`, `snap`,
+ * `escape` (the handle key), or a value that the part sets.
  */
 const createSheet = (part) => {
     const { host } = part
@@ -244,6 +247,7 @@ const createSheet = (part) => {
         isActive: false,
         // The visible height of the sheet, in px.
         position: 0,
+        reason: null,
     }
 
     // The heights where the sheet can rest, in px, from low to high: the snap
@@ -440,8 +444,10 @@ const createSheet = (part) => {
         const isFlick = Math.abs(velocity) > FLICK_VELOCITY
 
         isAtInitial = false
+        sheet.reason = 'snap'
 
         if (sheet.position < floor() * (1 - DISMISS_DISTANCE)) {
+            sheet.reason = 'drag'
             dismiss(velocity)
 
             return
@@ -465,6 +471,7 @@ const createSheet = (part) => {
         const below = rests.filter((rest) => rest < sheet.position - 1)
 
         if (!below.length) {
+            sheet.reason = 'drag'
             dismiss(velocity)
 
             return
@@ -596,6 +603,7 @@ const createSheet = (part) => {
         }
 
         sheet.position = next
+        sheet.reason = 'drag'
         render()
 
         const now = performance.now()
@@ -699,6 +707,7 @@ const createSheet = (part) => {
         }
 
         event.preventDefault()
+        sheet.reason = 'escape'
         dismiss()
     }
 
@@ -1035,6 +1044,389 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
     }
 }
 
+// The element sheet (`x-bottom-sheet:element`): the same frame as the action
+// sheet, with the theme surface and no ring.
+const ELEMENT_CLASSES = [
+    'fi-bottom-sheet',
+    'fixed',
+    'inset-x-0',
+    'bottom-0',
+    'top-auto',
+    'z-40',
+    'm-0',
+    'w-full',
+    'max-w-none',
+    'max-h-dvh',
+    'flex',
+    'flex-col',
+    'overflow-hidden',
+    'overscroll-contain',
+    'rounded-t-2xl',
+    'rounded-b-none',
+    'bg-white',
+    'shadow-xl',
+    'dark:bg-gray-900',
+    'pb-[env(safe-area-inset-bottom)]',
+    'pt-[max(0px,calc(env(safe-area-inset-top)_-_var(--bottom-sheet-gap,100vh)))]',
+    'will-change-transform',
+    'origin-bottom',
+    'transition-[scale]',
+    'duration-300',
+    'motion-reduce:transition-none',
+    // The body scrolls. The footer stays at the bottom.
+    '[&_[data-bottom-sheet-content]]:min-h-0',
+    '[&_[data-bottom-sheet-content]]:flex-1',
+    '[&_[data-bottom-sheet-content]]:overflow-y-auto',
+    '[&_[data-bottom-sheet-content]]:overscroll-contain',
+    '[&_[data-bottom-sheet-footer]]:shrink-0',
+]
+
+// The outside hit area of an element sheet. It takes the outside tap, so the
+// tap does not reach the page, and a scroll on it does not move the page.
+const BACKDROP_CLASSES = [
+    'fixed',
+    'inset-0',
+    'touch-none',
+    'transition-[opacity,visibility]',
+    'duration-300',
+    'motion-reduce:transition-none',
+]
+
+const BACKDROP_DARK_CLASSES = ['bg-gray-950/50', 'dark:bg-gray-950/75']
+
+const BACKDROP_HIDDEN_CLASSES = [
+    'invisible',
+    'opacity-0',
+    'pointer-events-none',
+]
+
+const createElementSheet = (
+    Alpine,
+    el,
+    { isEnabled = true, isOpen: wasOpen = false, isRestart = false } = {},
+) => {
+    const id = el.dataset.bottomSheetId
+    // `overlay`: the dark layer; `close`: no dark layer, an outside tap
+    // closes; `pass`: an outside tap reaches the page.
+    const outside =
+        el.dataset.bottomSheetOutside === 'pass'
+            ? 'pass'
+            : el.dataset.bottomSheetOverlay === 'false'
+              ? 'close'
+              : 'overlay'
+    const trap = Alpine.reactive({ isActive: false })
+
+    let isOpen = false
+    let opener = null
+    let lastHeight = null
+    let backdrop = null
+    let releaseTrap = null
+
+    const emit = (name, height) =>
+        el.dispatchEvent(
+            new CustomEvent(`bottom-sheet:${name}`, {
+                bubbles: true,
+                detail: { id, height, reason: sheet.reason },
+            }),
+        )
+
+    // The visible height: the CSS variable and the resize event.
+    const report = (height) => {
+        const value = Math.max(0, Math.round(height))
+
+        el.style.setProperty('--bottom-sheet-height', `${value}px`)
+
+        if (value !== lastHeight) {
+            lastHeight = value
+            emit('resize', value)
+        }
+    }
+
+    const sheet = createSheet({
+        host: el,
+        sheet: () => el,
+        content: () => el.querySelector('[data-bottom-sheet-content]'),
+        footerSelector: '[data-bottom-sheet-footer]',
+        classes: ELEMENT_CLASSES,
+        backClasses: MODAL_BACK_CLASSES,
+        layers: () => [el],
+        handleLabel: () => 'Close',
+        render: (height, offset, frame) => {
+            if (height !== null) {
+                el.style.height = height === 'auto' ? 'auto' : `${height}px`
+            }
+
+            if (frame) {
+                el.style.bottom = frame.bottom ? `${frame.bottom}px` : ''
+                frame.gap === null
+                    ? el.style.removeProperty('--bottom-sheet-gap')
+                    : el.style.setProperty(
+                          '--bottom-sheet-gap',
+                          `${frame.gap}px`,
+                      )
+            }
+
+            el.style.transform =
+                offset === '100%'
+                    ? 'translate3d(0, 100%, 0)'
+                    : offset
+                      ? `translate3d(0, ${offset}px, 0)`
+                      : ''
+
+            if (offset === '100%') {
+                report(0)
+            } else if (typeof height === 'number') {
+                report(height - offset)
+            }
+        },
+        clear: () => {
+            for (const name of [
+                'height',
+                'transform',
+                'bottom',
+                'visibility',
+                '--bottom-sheet-gap',
+                '--bottom-sheet-height',
+            ]) {
+                el.style.removeProperty(name)
+            }
+
+            lastHeight = null
+        },
+        isShown: () => isOpen,
+        requestClose: () => finishClose(),
+    })
+
+    sheet.isOpen = () => isOpen
+
+    // The outside hit area is under the sheet: one layer below it.
+    const setLayer = sheet.setLayer
+
+    sheet.setLayer = (layer) => {
+        setLayer(layer)
+
+        if (backdrop) {
+            backdrop.style.zIndex = `${(layer && sheet.isActive ? layer : TOP_LAYER) - 1}`
+        }
+    }
+
+    const toggleBackdrop = (isShown) =>
+        BACKDROP_HIDDEN_CLASSES.forEach((name) =>
+            backdrop?.classList.toggle(name, !isShown),
+        )
+
+    const preventScroll = (event) => event.cancelable && event.preventDefault()
+
+    const onOutside = () => isTopmostSheet(sheet) && close('outside')
+
+    const addBackdrop = () => {
+        if (outside === 'pass' || backdrop) {
+            return
+        }
+
+        backdrop = document.createElement('div')
+        backdrop.className = [
+            ...BACKDROP_CLASSES,
+            ...(outside === 'overlay' ? BACKDROP_DARK_CLASSES : []),
+            ...BACKDROP_HIDDEN_CLASSES,
+        ].join(' ')
+        backdrop.setAttribute('aria-hidden', 'true')
+        backdrop.style.zIndex = `${TOP_LAYER - 1}`
+        backdrop.addEventListener('click', onOutside)
+        backdrop.addEventListener('wheel', preventScroll, { passive: false })
+        backdrop.addEventListener('touchmove', preventScroll, {
+            passive: false,
+        })
+        // In the body, so a Livewire morph of the page does not remove it.
+        document.body.append(backdrop)
+    }
+
+    const removeBackdrop = () => {
+        backdrop?.remove()
+        backdrop = null
+    }
+
+    // The focus stays inside the sheet: the Alpine `x-trap` of Filament
+    // modals, with no autofocus (no keyboard on a phone) and no return
+    // (the sheet gives the focus back itself).
+    const startTrap = () => {
+        if (outside === 'pass') {
+            return
+        }
+
+        releaseTrap ??= Alpine.bind(el, {
+            'x-trap.noautofocus.noreturn': () => trap.isActive,
+        })
+        trap.isActive = true
+        el.querySelector('[data-bottom-sheet-handle]')?.focus({
+            preventScroll: true,
+        })
+    }
+
+    const stopTrap = () => {
+        if (!trap.isActive) {
+            return
+        }
+
+        trap.isActive = false
+
+        // The focus goes back to the opener, unless the user moved it.
+        const focused = document.activeElement
+
+        if (
+            opener?.isConnected &&
+            (el.contains(focused) || focused === document.body)
+        ) {
+            opener.focus({ preventScroll: true })
+        }
+
+        opener = null
+    }
+
+    const show = () => {
+        el.style.removeProperty('visibility')
+        toggleBackdrop(true)
+        pushSheet(sheet)
+    }
+
+    const hide = () => {
+        el.style.visibility = 'hidden'
+        toggleBackdrop(false)
+    }
+
+    const open = (reason) => {
+        if (isOpen) {
+            return
+        }
+
+        isOpen = true
+        sheet.reason = reason
+
+        if (!sheet.isActive) {
+            return
+        }
+
+        opener = document.activeElement
+        show()
+        emit('opened', 0)
+        sheet.open()
+        startTrap()
+    }
+
+    const finishClose = () => {
+        if (!isOpen) {
+            return
+        }
+
+        isOpen = false
+        sheet.halt()
+        removeSheet(sheet)
+        hide()
+        report(0)
+        emit('closed', 0)
+        stopTrap()
+    }
+
+    const close = (reason) => {
+        if (!isOpen) {
+            return
+        }
+
+        sheet.reason = reason
+
+        if (!sheet.isActive) {
+            isOpen = false
+
+            return
+        }
+
+        toggleBackdrop(false)
+        sheet.slideOut(0, finishClose)
+    }
+
+    // The condition of `x-bottom-sheet:element="condition"`. Off, the element
+    // gets its own styles again; an open sheet comes back open.
+    const setEnabled = (isOn) => {
+        if (isOn === sheet.isActive) {
+            return
+        }
+
+        if (!isOn) {
+            stopTrap()
+            removeBackdrop()
+            sheet.deactivate()
+
+            return
+        }
+
+        sheet.activate()
+        addBackdrop()
+
+        if (!isOpen) {
+            hide()
+            report(0)
+
+            return
+        }
+
+        show()
+        sheet.reason = 'viewport'
+        sheet.place()
+        startTrap()
+    }
+
+    const onOpenEvent = (event) => event.detail?.id === id && open('event')
+
+    const onCloseEvent = (event) => event.detail?.id === id && close('event')
+
+    const onKeyDown = (event) =>
+        event.key === 'Escape' &&
+        isOpen &&
+        sheet.isActive &&
+        isTopmostSheet(sheet) &&
+        close('escape')
+
+    const onViewportChange = () => {
+        if (!sheet.isActive || !isOpen || sheet.isDragging()) {
+            return
+        }
+
+        sheet.reason = 'viewport'
+        sheet.fit()
+    }
+
+    window.addEventListener('bottom-sheet:open', onOpenEvent)
+    window.addEventListener('bottom-sheet:close', onCloseEvent)
+    window.addEventListener('keydown', onKeyDown)
+    const unwatchViewport = watchViewport(onViewportChange)
+
+    // New options while the sheet is open: it stays open, with no new open
+    // animation.
+    isOpen = isRestart && wasOpen
+    setEnabled(isEnabled)
+
+    const destroy = () => {
+        const index = stack.indexOf(sheet)
+        const wasShown = isOpen
+
+        window.removeEventListener('bottom-sheet:open', onOpenEvent)
+        window.removeEventListener('bottom-sheet:close', onCloseEvent)
+        window.removeEventListener('keydown', onKeyDown)
+        unwatchViewport()
+        stopTrap()
+        releaseTrap?.()
+        releaseTrap = null
+        removeBackdrop()
+        sheet.destroy()
+
+        return { index, isOpen: wasShown }
+    }
+
+    destroy.setEnabled = setEnabled
+
+    return destroy
+}
+
 // The attributes of `BottomSheet::attributes()` that the directive reads.
 const OPTION_ATTRIBUTES = [
     'data-bottom-sheet-modal-from',
@@ -1045,11 +1437,14 @@ const OPTION_ATTRIBUTES = [
     'data-bottom-sheet-snap-points',
     'data-bottom-sheet-initial-height',
     'data-bottom-sheet-overlay',
+    // The element sheet only.
+    'data-bottom-sheet-id',
+    'data-bottom-sheet-outside',
 ]
 
 // The sheet state of the markup: null when the element is not a sheet.
-const stateOf = (el) =>
-    el.hasAttribute('x-bottom-sheet')
+const stateOf = (el, directive) =>
+    el.hasAttribute(directive)
         ? OPTION_ATTRIBUTES.map((name) => el.getAttribute(name)).join('|')
         : null
 
@@ -1073,54 +1468,83 @@ const plugin = (Alpine) => {
     // to the window events, so the directive skips the clones.
     Alpine.directive(
         'bottom-sheet',
-        Alpine.skipDuringClone((el, _directive, { cleanup }) => {
-            if (!el.isConnected) {
-                return
-            }
-
-            let state = stateOf(el)
-            let destroy = createModalSheet(Alpine, el)
-
-            el.__livewire_ignore_self = true
-
-            el._bottomSheetSync = (toEl) => {
-                const next = stateOf(toEl)
-
-                if (next === state) {
+        Alpine.skipDuringClone(
+            (el, { value, expression }, { cleanup, effect, evaluateLater }) => {
+                if (!el.isConnected) {
                     return
                 }
 
-                const { index = -1 } = destroy?.() ?? {}
+                const isElement = value === 'element'
+                const directive = isElement
+                    ? 'x-bottom-sheet:element'
+                    : 'x-bottom-sheet'
+                // The condition of the element sheet: off while it is false.
+                const condition =
+                    isElement && expression ? evaluateLater(expression) : null
+                let isEnabled = !condition
 
-                destroy = null
-                state = next
+                const create = (isRestart = false, isOpen = false) =>
+                    isElement
+                        ? createElementSheet(Alpine, el, {
+                              isEnabled,
+                              isOpen,
+                              isRestart,
+                          })
+                        : createModalSheet(Alpine, el, isRestart)
 
-                // No sheet now: the update gives the element its new
-                // attributes, and Alpine removes the directive.
-                if (next === null) {
-                    el.__livewire_ignore_self = false
-
-                    return
-                }
-
-                for (const name of OPTION_ATTRIBUTES) {
-                    toEl.hasAttribute(name)
-                        ? el.setAttribute(name, toEl.getAttribute(name))
-                        : el.removeAttribute(name)
-                }
+                let state = stateOf(el, directive)
+                let destroy = create()
 
                 el.__livewire_ignore_self = true
-                restartIndex = index === -1 ? null : index
-                destroy = createModalSheet(Alpine, el, true)
-                restartIndex = null
-            }
 
-            cleanup(() => {
-                destroy?.()
-                destroy = null
-                delete el._bottomSheetSync
-            })
-        }),
+                el._bottomSheetSync = (toEl) => {
+                    const next = stateOf(toEl, directive)
+
+                    if (next === state) {
+                        return
+                    }
+
+                    const { index = -1, isOpen = false } = destroy?.() ?? {}
+
+                    destroy = null
+                    state = next
+
+                    // No sheet now: the update gives the element its new
+                    // attributes, and Alpine removes the directive.
+                    if (next === null) {
+                        el.__livewire_ignore_self = false
+
+                        return
+                    }
+
+                    for (const name of OPTION_ATTRIBUTES) {
+                        toEl.hasAttribute(name)
+                            ? el.setAttribute(name, toEl.getAttribute(name))
+                            : el.removeAttribute(name)
+                    }
+
+                    el.__livewire_ignore_self = true
+                    restartIndex = index === -1 ? null : index
+                    destroy = create(true, isOpen)
+                    restartIndex = null
+                }
+
+                if (condition) {
+                    effect(() =>
+                        condition((isOn) => {
+                            isEnabled = !!isOn
+                            destroy?.setEnabled?.(isEnabled)
+                        }),
+                    )
+                }
+
+                cleanup(() => {
+                    destroy?.()
+                    destroy = null
+                    delete el._bottomSheetSync
+                })
+            },
+        ),
     )
 }
 
