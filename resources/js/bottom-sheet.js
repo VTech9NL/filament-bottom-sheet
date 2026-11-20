@@ -8,9 +8,9 @@
  * For a modal, Filament keeps the modal itself: open and close, the scroll
  * lock, the focus trap, Escape, the backdrop tap and the nested modal stack
  * (`modal.js`). A section has no modal, so the directive opens and closes it
- * on the `open-bottom-sheet` and `close-bottom-sheet` window events, and the
- * Alpine focus plugin (`x-trap.noscroll`, from the PHP attributes) traps the
- * focus and locks the page scroll.
+ * on the `open-bottom-sheet` and `close-bottom-sheet` window events, binds the
+ * Alpine focus plugin (`x-trap`) to trap the focus, and locks the page scroll.
+ * It needs no `x-data` of its own, so the app can keep its `x-data` there.
  */
 
 // The classes are literal strings, so the Tailwind build of the panel theme
@@ -37,6 +37,7 @@ const MODAL_CLASSES = [
     'origin-bottom',
     'transition-[scale]',
     'duration-300',
+    'motion-reduce:transition-none',
     // The drag handle.
     'before:mx-auto',
     'before:mt-2',
@@ -78,6 +79,7 @@ const SECTION_CLASSES = [
     'outline-none',
     'transition-colors',
     'duration-300',
+    'motion-reduce:transition-none',
     'data-open:bg-gray-950/50',
     'dark:data-open:bg-gray-950/75',
     // Only the section shows, not its label or the schemas around it.
@@ -101,6 +103,7 @@ const SECTION_CLASSES = [
     '[&>.fi-section]:origin-bottom',
     '[&>.fi-section]:transition-[scale]',
     '[&>.fi-section]:duration-300',
+    '[&>.fi-section]:motion-reduce:transition-none',
     // The drag handle.
     '[&>.fi-section]:before:mx-auto',
     '[&>.fi-section]:before:mt-2',
@@ -165,8 +168,20 @@ const NOT_DRAGGABLE = 'input, textarea, select, button, a, [contenteditable]'
 // topmost one moves back, as the iOS sheets do.
 const stack = []
 
+// The topmost sheet keeps the `z-40` of its classes (a Filament modal also has
+// `z-40`). Each sheet under it gets a lower layer, so the sheet that opened
+// last is on top, whatever its place in the DOM.
+const TOP_LAYER = 40
+
+const LOWEST_LAYER = 31
+
 const updateStack = () =>
-    stack.forEach((sheet, index) => sheet.moveBack(index < stack.length - 1))
+    stack.forEach((sheet, index) => {
+        const depth = stack.length - 1 - index
+
+        sheet.moveBack(depth > 0)
+        sheet.setLayer(depth && Math.max(TOP_LAYER - depth, LOWEST_LAYER))
+    })
 
 const pushSheet = (sheet) => {
     if (!stack.includes(sheet)) {
@@ -184,10 +199,62 @@ const removeSheet = (sheet) => {
     }
 
     sheet.moveBack(false)
+    sheet.setLayer(0)
     updateStack()
 }
 
 const isTopmostSheet = (sheet) => stack[stack.length - 1] === sheet
+
+// One Escape closes one sheet: the sheet that is topmost when the key event
+// starts. The plugin adds this listener before Alpine starts, so it runs before
+// the Escape listeners of the Filament modals. A modal sheet closes with its
+// Filament modal; a section sheet stops the event, so the modal under it stays
+// open.
+const onEscape = (event) => {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
+        stack[stack.length - 1]?.onEscape?.(event)
+    }
+}
+
+// The section sheets lock the page scroll on `<body>`. The Filament modals lock
+// it on `<html>` (`modal.js`). Each lock restores only its own element, so a
+// close or a breakpoint change releases only its own lock, and the page scrolls
+// again only when no lock is left.
+let scrollLocks = 0
+let restoreScroll = null
+
+const lockScroll = () => {
+    if (scrollLocks++ > 0) {
+        return
+    }
+
+    const { style } = document.body
+    const { overflow, paddingRight } = style
+    const html = document.documentElement
+    const scrollbarWidth = window.innerWidth - html.clientWidth
+    const gutter = window.getComputedStyle(html).scrollbarGutter
+
+    style.overflow = 'hidden'
+
+    // A reserved scrollbar gutter already keeps the page width.
+    if (scrollbarWidth > 0 && (!gutter || gutter === 'auto')) {
+        style.paddingRight = `${scrollbarWidth}px`
+    }
+
+    restoreScroll = () => {
+        style.overflow = overflow
+        style.paddingRight = paddingRight
+    }
+}
+
+const unlockScroll = () => {
+    if (scrollLocks === 0 || --scrollLocks > 0) {
+        return
+    }
+
+    restoreScroll?.()
+    restoreScroll = null
+}
 
 const readOptions = (el) => ({
     until: el.dataset.bottomSheetUntil || '48rem',
@@ -231,6 +298,7 @@ const restoreFocus = (opener, container) => {
  * - `footerSelector`: the footer, where a drag does not start;
  * - `classes` and `backClasses`;
  * - `render(height, offset)` and `clear()`, for the sheet frame;
+ * - `layers()`: the elements that get the stack layer (`z-index`);
  * - `isShown()`: the sheet element is shown;
  * - `requestClose()`: close the part, as the user asks for it.
  */
@@ -511,8 +579,26 @@ const createSheet = (part) => {
     }
 
     const moveDrag = (y, event) => {
-        if (!drag || drag.mode === 'scroll') {
+        if (!drag) {
             return
+        }
+
+        if (drag.mode === 'scroll') {
+            const isDown = y > drag.lastY
+
+            drag.lastY = y
+
+            // The body scrolls down to its top: the same drag moves the sheet
+            // from there.
+            if (!isDown || isScrolled(drag.target)) {
+                return
+            }
+
+            drag.mode = 'sheet'
+            drag.startY = y
+            drag.startPosition = sheet.position
+            drag.samples = [{ time: performance.now(), y }]
+            stop()
         }
 
         if (drag.mode === 'pending') {
@@ -533,6 +619,7 @@ const createSheet = (part) => {
                 stop()
             } else {
                 drag.mode = 'scroll'
+                drag.lastY = y
 
                 return
             }
@@ -619,6 +706,11 @@ const createSheet = (part) => {
             host.classList.toggle(name, isBack && sheet.isActive),
         )
 
+    sheet.setLayer = (layer) =>
+        part.layers().forEach((element) => {
+            element.style.zIndex = layer && sheet.isActive ? `${layer}` : ''
+        })
+
     sheet.activate = () => {
         sheet.isActive = true
         host.classList.add(...part.classes)
@@ -652,11 +744,11 @@ const createSheet = (part) => {
     return sheet
 }
 
-const createModalSheet = (Alpine, el, { effect, cleanup }) => {
+const createModalSheet = (Alpine, el, isRestart = false) => {
     const root = el.closest('.fi-modal')
 
     if (!root) {
-        return
+        return null
     }
 
     const modal = Alpine.$data(el)
@@ -668,6 +760,10 @@ const createModalSheet = (Alpine, el, { effect, cleanup }) => {
         footerSelector: '.fi-modal-footer',
         classes: MODAL_CLASSES,
         backClasses: MODAL_BACK_CLASSES,
+        layers: () =>
+            root.querySelectorAll(
+                ':scope > .fi-modal-close-overlay, :scope > .fi-modal-window-ctn',
+            ),
         render: (height, offset) => {
             if (height !== null) {
                 el.style.height = height === 'auto' ? 'auto' : `${height}px`
@@ -701,6 +797,7 @@ const createModalSheet = (Alpine, el, { effect, cleanup }) => {
     })
 
     sheet.isOpen = () => modal.isOpen
+    sheet.modal = root
 
     const onBreakpointChange = () => {
         if (!sheet.breakpoint.matches) {
@@ -730,7 +827,12 @@ const createModalSheet = (Alpine, el, { effect, cleanup }) => {
         sheet.activate()
     }
 
-    effect(() => {
+    const visibility = Alpine.effect(() => {
+        // New options while the modal is open: no new open animation.
+        const shouldPlace = isRestart
+
+        isRestart = false
+
         if (!modal.isWindowVisible) {
             // Filament closes the modal: the leave transition in
             // `bottom-sheet.css` moves the sheet down.
@@ -747,23 +849,31 @@ const createModalSheet = (Alpine, el, { effect, cleanup }) => {
         }
 
         pushSheet(sheet)
-        sheet.open()
+        shouldPlace ? sheet.place() : sheet.open()
     })
 
-    cleanup(() => {
+    return () => {
+        Alpine.release(visibility)
         sheet.destroy()
         sheet.breakpoint.removeEventListener('change', onBreakpointChange)
         window.removeEventListener('resize', onResize)
-    })
+
+        return { wasOpen: false }
+    }
 }
 
-const createSectionSheet = (Alpine, el, { cleanup }) => {
+const createSectionSheet = (Alpine, el, isRestart = false) => {
     const id = el.dataset.bottomSheetId
-    // The state of `x-trap.noscroll` (the PHP attributes).
-    const scope = Alpine.$data(el)
     const section = () => el.querySelector(':scope > .fi-section')
+    // The state of the focus trap. The directive keeps it, so the section
+    // needs no `x-data`.
+    const trap = Alpine.reactive({ isActive: false })
+    const removeTrap = Alpine.bind(el, {
+        'x-trap.noreturn.noautofocus': () => trap.isActive,
+    })
 
     let isOpen = false
+    let isLocked = false
     let opener = null
 
     const sheet = createSheet({
@@ -776,6 +886,7 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
         footerSelector: '.fi-section-footer',
         classes: SECTION_CLASSES,
         backClasses: SECTION_BACK_CLASSES,
+        layers: () => [el],
         render: (height, offset) => {
             if (height !== null) {
                 el.style.setProperty(
@@ -798,6 +909,13 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
     })
 
     sheet.isOpen = () => isOpen
+
+    const setLocked = (shouldLock) => {
+        if (shouldLock !== isLocked) {
+            isLocked = shouldLock
+            shouldLock ? lockScroll() : unlockScroll()
+        }
+    }
 
     const setDialog = (isDialog) => {
         const heading = section()?.getAttribute('aria-labelledby')
@@ -828,7 +946,8 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
     // opening button.
     const hide = () => {
         isOpen = false
-        scope.isBottomSheetOpen = false
+        trap.isActive = false
+        setLocked(false)
         delete el.dataset.open
         el.classList.add('hidden')
         setDialog(false)
@@ -849,6 +968,7 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
 
         opener = active && !el.contains(active) ? active : null
         isOpen = true
+        setLocked(true)
         el.classList.remove('hidden')
         setDialog(true)
         pushSheet(sheet)
@@ -860,7 +980,7 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
             }
 
             el.dataset.open = ''
-            scope.isBottomSheetOpen = true
+            trap.isActive = true
             Alpine.nextTick(() => isOpen && el.focus({ preventScroll: true }))
         })
     }
@@ -882,16 +1002,19 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
 
     const onClose = (event) => isForThisSheet(event) && close()
 
-    const onKeydown = (event) => {
-        if (
-            event.key !== 'Escape' ||
-            !isOpen ||
-            !isTopmostSheet(sheet) ||
-            document.querySelector('.fi-modal-open')
-        ) {
+    // A Filament modal that is not a sheet (for example at its own breakpoint)
+    // closes with Escape first, as before.
+    const hasOtherModal = () =>
+        [...document.querySelectorAll('.fi-modal-open')].some(
+            (modal) => !stack.some((other) => other.modal === modal),
+        )
+
+    sheet.onEscape = (event) => {
+        if (!isOpen || hasOtherModal()) {
             return
         }
 
+        event.stopImmediatePropagation()
         close()
     }
 
@@ -909,7 +1032,8 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
 
         isOpen = false
         opener = null
-        scope.isBottomSheetOpen = false
+        trap.isActive = false
+        setLocked(false)
         delete el.dataset.open
         el.classList.remove('hidden')
         setDialog(false)
@@ -920,6 +1044,8 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
         if (wasOpen && document.activeElement === el) {
             el.blur()
         }
+
+        return wasOpen
     }
 
     const onBreakpointChange = () =>
@@ -930,7 +1056,6 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
 
     window.addEventListener('open-bottom-sheet', onOpen)
     window.addEventListener('close-bottom-sheet', onClose)
-    window.addEventListener('keydown', onKeydown)
     window.addEventListener('resize', onResize)
     el.addEventListener('click', onClick)
     sheet.breakpoint.addEventListener('change', onBreakpointChange)
@@ -939,40 +1064,117 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
         // `hidden` is set first, so the section stays hidden when the
         // first-paint class is removed.
         activate()
+
+        // New options while the sheet is open: it stays open.
+        if (isRestart) {
+            open()
+        }
     }
 
     el.classList.remove(...SECTION_CLOAK_CLASSES)
 
-    cleanup(() => {
-        deactivate()
+    return () => {
+        const wasOpen = deactivate()
+
         sheet.destroy()
+        removeTrap()
         window.removeEventListener('open-bottom-sheet', onOpen)
         window.removeEventListener('close-bottom-sheet', onClose)
-        window.removeEventListener('keydown', onKeydown)
         window.removeEventListener('resize', onResize)
         el.removeEventListener('click', onClick)
         sheet.breakpoint.removeEventListener('change', onBreakpointChange)
-    })
+
+        return { wasOpen }
+    }
 }
 
+// The attributes of `BottomSheet::attributes()` that the directive reads.
+const OPTION_ATTRIBUTES = [
+    'data-bottom-sheet-id',
+    'data-bottom-sheet-until',
+    'data-bottom-sheet-snap-points',
+    'data-bottom-sheet-initial-height',
+]
+
+// The sheet state of the markup: null when the element is not a sheet.
+const stateOf = (el, directive) =>
+    el.hasAttribute(directive)
+        ? OPTION_ATTRIBUTES.map((name) => el.getAttribute(name)).join('|')
+        : null
+
+// `wire:ignore.self` keeps the classes and styles of the directive, so a
+// Livewire update does not change the attributes of the host. Before each
+// update, the directive compares the new markup with its state: when the
+// condition or an option changes, it starts again with the new state.
+const onMorph = ({ el, toEl }) => el._bottomSheetSync?.(toEl)
+
 const plugin = (Alpine) => {
+    window.addEventListener('keydown', onEscape)
+
+    if (window.Livewire) {
+        window.Livewire.hook('morph.updating', onMorph)
+    } else {
+        document.addEventListener('livewire:init', () =>
+            window.Livewire.hook('morph.updating', onMorph),
+        )
+    }
+
     // A Livewire update clones the Alpine components of the page into
     // elements that are not in the page. A sheet on such a clone would listen
     // to the window events, so the directive skips the clones.
     Alpine.directive(
         'bottom-sheet',
-        Alpine.skipDuringClone((el, { modifiers }, utilities) => {
+        Alpine.skipDuringClone((el, { modifiers }, { cleanup }) => {
             if (!el.isConnected) {
                 return
             }
 
-            if (modifiers.includes('section')) {
-                createSectionSheet(Alpine, el, utilities)
+            const isSection = modifiers.includes('section')
+            const directive = isSection
+                ? 'x-bottom-sheet.section'
+                : 'x-bottom-sheet'
+            const create = isSection ? createSectionSheet : createModalSheet
 
-                return
+            let state = stateOf(el, directive)
+            let destroy = create(Alpine, el)
+
+            el.__livewire_ignore_self = true
+
+            el._bottomSheetSync = (toEl) => {
+                const next = stateOf(toEl, directive)
+
+                if (next === state) {
+                    return
+                }
+
+                const { wasOpen } = destroy?.() ?? {}
+
+                destroy = null
+                state = next
+
+                // No sheet now: the update gives the element its new
+                // attributes, and Alpine removes the directive.
+                if (next === null) {
+                    el.__livewire_ignore_self = false
+
+                    return
+                }
+
+                for (const name of OPTION_ATTRIBUTES) {
+                    toEl.hasAttribute(name)
+                        ? el.setAttribute(name, toEl.getAttribute(name))
+                        : el.removeAttribute(name)
+                }
+
+                el.__livewire_ignore_self = true
+                destroy = create(Alpine, el, isSection ? wasOpen : true)
             }
 
-            createModalSheet(Alpine, el, utilities)
+            cleanup(() => {
+                destroy?.()
+                destroy = null
+                delete el._bottomSheetSync
+            })
         }),
     )
 }
