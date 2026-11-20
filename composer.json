@@ -1,0 +1,62 @@
+{
+    "name": "vtech9nl/filament-bottom-sheet",
+    "description": "Native iOS and Android bottom sheets for Filament actions and sections, below a breakpoint",
+    "keywords": [
+        "filament",
+        "filament-plugin",
+        "bottom-sheet",
+        "laravel",
+        "mobile"
+    ],
+    "homepage": "https://github.com/VTech9NL/filament-bottom-sheet",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Yaniv Harush",
+            "email": "harushy@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "filament/filament": "^5.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0|^11.0",
+        "orchestra/workbench": "^10.0|^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "pestphp/pest-plugin-livewire": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "VTech9NL\\BottomSheet\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "VTech9NL\\BottomSheet\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "format": "vendor/bin/pint",
+        "test": "vendor/bin/pest"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "VTech9NL\\BottomSheet\\BottomSheetServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
