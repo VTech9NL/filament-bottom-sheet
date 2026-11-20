@@ -9,6 +9,8 @@
  *
  * Filament keeps the modal itself: open and close, the scroll lock, the focus
  * trap, Escape, the backdrop tap and the nested modal stack (`modal.js`).
+ * `data-bottom-sheet-overlay="false"` changes the sheet type only: no dark
+ * layer, taps through the window container, and the page keeps its scroll.
  */
 
 // The classes are literal strings, so the Tailwind build of the panel theme
@@ -729,7 +731,89 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
             serverClasses = current
             applyType(root)
         }
+
+        applyPassThrough()
     })
+
+    // `x-show` sets an inline display on the overlay. An important inline
+    // value hides it, and this observer puts that value back when `x-show`
+    // writes the style again. It watches the overlay only, not the window:
+    // the window style changes on every drag frame.
+    let overlayNode = null
+    const overlayObserver = new MutationObserver(() => applyPassThrough())
+
+    const passesThrough = () =>
+        type === 'sheet' && el.dataset.bottomSheetOverlay === 'false'
+
+    const applyPassThrough = () => {
+        const pass = passesThrough()
+        const overlay = root.querySelector(':scope > .fi-modal-close-overlay')
+        const container = root.querySelector(':scope > .fi-modal-window-ctn')
+
+        if (overlay) {
+            const isHidden =
+                overlay.style.display === 'none' &&
+                overlay.style.getPropertyPriority('display') === 'important'
+
+            if (pass && !isHidden) {
+                overlay.style.setProperty('display', 'none', 'important')
+            } else if (
+                !pass &&
+                overlay.style.getPropertyPriority('display') === 'important'
+            ) {
+                overlay.style.removeProperty('display')
+            }
+        }
+
+        // The classes are literal strings, so the panel theme can find them.
+        container?.classList.toggle('pointer-events-none', pass)
+        el.classList.toggle('pointer-events-auto', pass)
+
+        if (overlay !== overlayNode) {
+            overlayObserver.disconnect()
+            overlayNode = overlay
+
+            if (overlay) {
+                overlayObserver.observe(overlay, {
+                    attributes: true,
+                    attributeFilter: ['style'],
+                })
+            }
+        }
+    }
+
+    // Filament takes the page scroll lock after it sets `isOpen`. Two frames
+    // later this gives the lock back while the sheet has no overlay. The
+    // modal type and the slide-over type take the lock again.
+    let releasedScroll = false
+    let scrollSync = 0
+
+    const syncPageScroll = () => {
+        cancelAnimationFrame(scrollSync)
+
+        scrollSync = requestAnimationFrame(() => {
+            scrollSync = requestAnimationFrame(() => {
+                scrollSync = 0
+                applyPassThrough()
+
+                if (!modal.isOpen) {
+                    return
+                }
+
+                if (passesThrough()) {
+                    modal.releaseScrollLock()
+                    releasedScroll = true
+
+                    return
+                }
+
+                if (releasedScroll) {
+                    modal.acquireScrollLock()
+                    releasedScroll = false
+                }
+            })
+        })
+    }
 
     const onTypeChange = () => {
         const next = currentType()
@@ -740,6 +824,8 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
 
         type = next
         applyType(root)
+        applyPassThrough()
+        syncPageScroll()
 
         if (type !== 'sheet') {
             sheet.deactivate()
@@ -768,7 +854,12 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
 
     type = currentType()
     applyType(root)
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    applyPassThrough()
+    observer.observe(root, {
+        attributes: true,
+        attributeFilter: ['class'],
+        childList: true,
+    })
 
     if (type === 'sheet') {
         sheet.activate()
@@ -787,9 +878,12 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
             // (`filamentActionModals`).
             sheet.halt()
             removeSheet(sheet)
+            syncPageScroll()
 
             return
         }
+
+        syncPageScroll()
 
         if (!sheet.isActive) {
             return
@@ -809,10 +903,19 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
         )
         window.removeEventListener('resize', onResize)
 
-        // The root gets its server classes again.
+        // The root gets its server classes again. The overlay and the
+        // container get the Filament behaviour again.
         observer.disconnect()
+        overlayObserver.disconnect()
+        cancelAnimationFrame(scrollSync)
         type = null
         applyType(root)
+        applyPassThrough()
+
+        if (releasedScroll && modal.isOpen && !modal.isDestroyed) {
+            modal.acquireScrollLock()
+            releasedScroll = false
+        }
 
         return { index }
     }
@@ -827,6 +930,7 @@ const OPTION_ATTRIBUTES = [
     'data-bottom-sheet-slide-over-sticky-footer',
     'data-bottom-sheet-snap-points',
     'data-bottom-sheet-initial-height',
+    'data-bottom-sheet-overlay',
 ]
 
 // The sheet state of the markup: null when the element is not a sheet.

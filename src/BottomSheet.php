@@ -67,6 +67,13 @@ final class BottomSheet
     private float|string $initialHeight = self::CONTENT_HEIGHT;
 
     /**
+     * `false` hides the dark layer of the sheet type. The default keeps it.
+     */
+    private bool|Closure $overlay = true;
+
+    private bool $overlayIsSet = false;
+
+    /**
      * Give the options of the action. The first call attaches the
      * attributes to the action, as lazy closures, so the order of the macro
      * calls does not matter.
@@ -139,6 +146,14 @@ final class BottomSheet
         sort($points);
 
         $this->snapPoints = array_values(array_unique($points, SORT_REGULAR));
+
+        return $this;
+    }
+
+    public function overlay(bool|Closure $condition = true): self
+    {
+        $this->overlay = $condition;
+        $this->overlayIsSet = true;
 
         return $this;
     }
@@ -217,6 +232,11 @@ final class BottomSheet
             $options['data-bottom-sheet-slide-over-sticky-footer'] = self::slideOverSticky($action, 'footer');
         }
 
+        // Absent when the overlay stays, so the default render does not change.
+        if ($action->evaluate($this->overlay) === false) {
+            $options['data-bottom-sheet-overlay'] = 'false';
+        }
+
         return [
             ...$options,
             'data-bottom-sheet-snap-points' => (string) json_encode($this->snapPoints),
@@ -247,9 +267,9 @@ final class BottomSheet
      */
     private function ensureNoConflict(Action $action): void
     {
-        if (! $this->isCalled && ($this->modalFrom !== null || $this->slideOverFrom !== null)) {
+        if (! $this->isCalled && ($this->modalFrom !== null || $this->slideOverFrom !== null || $this->overlayIsSet)) {
             throw new InvalidArgumentException(sprintf(
-                'The action [%s] uses ->modalFrom() or ->slideOverFrom() without ->bottomSheet().',
+                'The action [%s] uses ->modalFrom(), ->slideOverFrom() or ->bottomSheetOverlay() without ->bottomSheet().',
                 $action->getName(),
             ));
         }
