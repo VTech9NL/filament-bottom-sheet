@@ -704,14 +704,26 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
         )
     }
 
-    // The root has no `wire:ignore.self`: before a Livewire update, the new
-    // root markup gets the classes of the current type, so it keeps them.
-    root._bottomSheetSync = (toEl) => {
-        serverClasses = TYPE_CLASSES.filter((name) =>
-            toEl.classList.contains(name),
+    // The root has no `wire:ignore.self`, and Filament updates the action
+    // modals with its own morph (`partials.js`), with no Livewire morph hook.
+    // When an update gives the root its server classes again, the observer
+    // keeps them as the server state and gives the slide-over classes again,
+    // before the next paint.
+    const observer = new MutationObserver(() => {
+        const current = TYPE_CLASSES.filter((name) =>
+            root.classList.contains(name),
         )
-        applyType(toEl)
-    }
+
+        if (type !== 'slideOver') {
+            serverClasses = current
+        } else if (
+            current.length !== slideOverClasses.length ||
+            !slideOverClasses.every((name) => current.includes(name))
+        ) {
+            serverClasses = current
+            applyType(root)
+        }
+    })
 
     const onTypeChange = () => {
         const next = currentType()
@@ -750,6 +762,7 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
 
     type = currentType()
     applyType(root)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
 
     if (type === 'sheet') {
         sheet.activate()
@@ -791,9 +804,9 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
         window.removeEventListener('resize', onResize)
 
         // The root gets its server classes again.
+        observer.disconnect()
         type = null
         applyType(root)
-        delete root._bottomSheetSync
 
         return { index }
     }
@@ -817,8 +830,7 @@ const stateOf = (el) =>
 // `wire:ignore.self` keeps the classes and styles of the directive, so a
 // Livewire update does not change the attributes of the window. Before each
 // update, the directive compares the new markup with its state: when the
-// condition or an option changes, it starts again with the new state. The
-// modal root keeps the classes of its window type.
+// condition or an option changes, it starts again with the new state.
 const onMorph = ({ el, toEl }) => el._bottomSheetSync?.(toEl)
 
 const plugin = (Alpine) => {

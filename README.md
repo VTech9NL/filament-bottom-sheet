@@ -5,25 +5,29 @@
 [![Total downloads](https://img.shields.io/packagist/dt/vtech9nl/filament-bottom-sheet.svg?style=flat-square)](https://packagist.org/packages/vtech9nl/filament-bottom-sheet)
 [![License](https://img.shields.io/packagist/l/vtech9nl/filament-bottom-sheet.svg?style=flat-square)](LICENSE)
 
-Below a breakpoint, a [Filament](https://filamentphp.com) v5 action or section opens as a native bottom sheet. At and above the breakpoint, the action stays a modal and the section stays in its place.
+The bottom sheet is the third window type of a [Filament](https://filamentphp.com) v5 action, next to the modal and the slide-over. It is mobile first: `->bottomSheet()` makes the action a native bottom sheet, and `->modalFrom()` and `->slideOverFrom()` change the type from a breakpoint and up.
 
 <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-action-dark.png">
-    <img alt="A Filament action open as a bottom sheet on a phone" src="https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-action-light.png">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-sheet-dark.png">
+    <img alt="A Filament action open as a bottom sheet on a phone" src="https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-sheet-light.png">
 </picture>
 
 ## Features
 
-- **One call.** `->bottomSheet('lg')` on an action or a section.
+- **One action, three window types.** `->bottomSheet()->modalFrom('md')->slideOverFrom('lg')` is a sheet on a phone, a modal on a tablet and a slide-over on a desktop.
 - **Phone behaviour.** Snap points, drag, flick, scroll and dismiss. A second sheet stacks on the first.
-- **Desktop behaviour.** The action is the normal modal. The section shows in its column.
-- **Your theme.** The sheet uses Tailwind utilities and the Filament colour tokens.
+- **Filament look.** The modal and the slide-over use the Filament classes, so your theme styles them as Filament does.
+- **No close on a resize.** A resize changes the type of an open window. The form data stays.
 
 ## Screenshots
 
-| Light | Dark |
-| --- | --- |
-| ![Action sheet, light](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-action-light.png) | ![Action sheet, dark](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-action-dark.png) |
+The action `->bottomSheet()->modalFrom('md')->slideOverFrom('lg')`:
+
+| Width | Light | Dark |
+| --- | --- | --- |
+| 390 px, sheet | ![Sheet, light](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-sheet-light.png) | ![Sheet, dark](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/phone-sheet-dark.png) |
+| 820 px, modal | ![Modal, light](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/tablet-modal-light.png) | ![Modal, dark](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/tablet-modal-dark.png) |
+| 1440 px, slide-over | ![Slide-over, light](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/desktop-slide-over-light.png) | ![Slide-over, dark](https://raw.githubusercontent.com/VTech9NL/filament-bottom-sheet/main/art/desktop-slide-over-dark.png) |
 
 A nested confirmation stacks on the first sheet:
 
@@ -45,13 +49,12 @@ A nested confirmation stacks on the first sheet:
 
     Laravel registers the service provider. You add no plugin on the panel.
 
-2. The panel theme needs `@source` for this package. The directive classes live in `resources/js`. The class that hides a section sheet before Alpine starts lives in `src`.
+2. The panel theme needs `@source` for the directive classes of this package.
 
     Open the theme file, for example `resources/css/filament/admin/theme.css`:
 
     ```css
     @source '../../../../vendor/vtech9nl/filament-bottom-sheet/resources/js';
-    @source '../../../../vendor/vtech9nl/filament-bottom-sheet/src';
     ```
 
 3. Build the theme:
@@ -64,7 +67,7 @@ Filament loads the package JavaScript and a small CSS file on each panel.
 
 ## Usage
 
-### An action
+### A sheet at each width
 
 ```php
 use Filament\Actions\Action;
@@ -73,10 +76,41 @@ Action::make('edit')
     ->schema([
         // ...
     ])
-    ->bottomSheet('lg');
+    ->bottomSheet();
 ```
 
-Below `lg` (64rem), the modal opens as a sheet. At `lg` and above, it is the normal modal.
+### A sheet, then a slide-over
+
+```php
+Action::make('edit')
+    ->bottomSheet()
+    ->slideOverFrom('lg');
+```
+
+Below `lg` (64rem), the action opens as a sheet. From `lg`, it opens as a Filament slide-over.
+
+### A sheet, then a modal
+
+```php
+Action::make('edit')
+    ->bottomSheet()
+    ->modalFrom('md');
+```
+
+Below `md` (48rem), the action opens as a sheet. From `md`, it opens as the normal Filament modal, with the width of `modalWidth()`.
+
+### A sheet, a modal and a slide-over
+
+```php
+Action::make('edit')
+    ->bottomSheet()
+    ->modalFrom('md')
+    ->slideOverFrom('lg');
+```
+
+The order of the breakpoints is free. `->bottomSheet()->slideOverFrom('md')->modalFrom('lg')` is a sheet below `md`, a slide-over from `md` and a modal from `lg`.
+
+### Nested actions
 
 A nested action that must stack on a sheet needs `->overlayParentActions()`:
 
@@ -84,92 +118,30 @@ A nested action that must stack on a sheet needs `->overlayParentActions()`:
 Action::make('reset')
     ->requiresConfirmation()
     ->overlayParentActions()
-    ->bottomSheet('lg');
+    ->bottomSheet()
+    ->modalFrom('md');
 ```
 
-### A section
+In a modal or a slide-over, a nested action behaves as in Filament.
 
-A section sheet needs an `id()` or a `key()`. Below the breakpoint the section is hidden until you open it. At the breakpoint and above, it shows in its place and the events do nothing.
+## Rules
 
-```php
-use Filament\Actions\Action;
-use Filament\Schemas\Components\Section;
+These rules stop a wrong combination at once, with an `InvalidArgumentException`:
 
-Section::make('Room')
-    ->id('room')
-    ->schema([
-        // ...
-    ])
-    ->footerActions([
-        Action::make('save'),
-        Action::make('close')
-            ->alpineClickHandler("\$dispatch('close-bottom-sheet', { id: 'room' })")
-            ->extraAttributes(['class' => 'lg:hidden']),
-    ])
-    ->bottomSheet('lg');
+- `->bottomSheet()` cannot be used with `->slideOver()` or `->modal(false)`. Use `->slideOverFrom()` or `->modalFrom()`.
+- `->modalFrom()` and `->slideOverFrom()` need `->bottomSheet()`.
+- `->modalFrom()` and `->slideOverFrom()` cannot use the same breakpoint.
+- A breakpoint name must be one of the names below.
 
-Action::make('openRoom')
-    ->label('Room')
-    ->alpineClickHandler("\$dispatch('open-bottom-sheet', { id: 'room' })")
-    ->extraAttributes(['class' => 'lg:hidden']);
-```
-
-Open the sheet with `$dispatch('open-bottom-sheet', { id })`. Close it with `$dispatch('close-bottom-sheet', { id })`.
-
-While the section is a sheet, its label and its collapse button are hidden. The footer actions stay at the bottom of the sheet.
-
-The sheet sets no `x-data` on the section wrapper. The wrapper can have the `x-data` of the app, for example from `extraAlpineAttributes()`.
-
-### One form, two shells
-
-Use one form class in a section at `lg` and above, and in an action with `->bottomSheet('lg')` below `lg`.
-
-```php
-use Filament\Actions\Action;
-use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
-
-class RoomForm
-{
-    public static function schema(): array
-    {
-        return [
-            TextInput::make('name'),
-        ];
-    }
-}
-
-Grid::make(['default' => 1, 'lg' => 2])->schema([
-    Section::make('Room')
-        ->schema(RoomForm::schema())
-        ->extraAttributes(['class' => 'max-lg:hidden']),
-]);
-
-Action::make('editRoom')
-    ->schema(RoomForm::schema())
-    ->bottomSheet('lg')
-    ->extraAttributes(['class' => 'lg:hidden']);
-```
-
-The section sits in the column at `lg` and above. Below `lg`, the action opens the same fields as a sheet.
-
-## Events
-
-| Event | Detail | Effect below the breakpoint |
-| --- | --- | --- |
-| `open-bottom-sheet` | `{ id }` | Opens the section sheet with that id. |
-| `close-bottom-sheet` | `{ id }` | Closes that section sheet. |
-
-At and above the breakpoint, both events do nothing.
+The macros can be called in each order. The plugin checks the conflicts when Filament renders the action.
 
 ## Options
 
-`bottomSheet('lg')` is the short form of `bottomSheet(true, 'lg')`.
-
 | Method | Default | Effect |
 | --- | --- | --- |
-| `bottomSheet($condition, $until)` | on, `md` | Below `$until`, the part is a sheet. `false`, or a closure that returns `false`, leaves the part unchanged. |
+| `bottomSheet($condition)` | on | The action is a sheet at each width that has no other type. `false`, or a closure that returns `false`, renders the action as Filament does. |
+| `modalFrom($breakpoint)` | none | From this breakpoint and up, the action is the Filament modal. |
+| `slideOverFrom($breakpoint)` | none | From this breakpoint and up, the action is a Filament slide-over. `slideOverPosition()` sets its side. |
 | `bottomSheetSnapPoints($points)` | `[0.5, 0.8, 1.0]` | Heights where the sheet can rest, as parts of the viewport height. |
 | `bottomSheetInitialHeight($height)` | `'content'` | `'content'` opens at the height of the header, body and footer, and never above the highest snap point. A number opens at that part of the viewport. When the content height cannot be measured, the sheet opens at `0.5`. |
 
@@ -183,11 +155,17 @@ The breakpoint names are the Tailwind CSS v4 defaults:
 | `xl` | 80rem |
 | `2xl` | 96rem |
 
+## Upgrade from v0.1
+
+- `->bottomSheet('lg')` and `->bottomSheet(true, 'lg')` become `->bottomSheet()->modalFrom('lg')`.
+- `->slideOver()->bottomSheet('lg')` becomes `->bottomSheet()->slideOverFrom('lg')`.
+- The section sheet is removed, with the `open-bottom-sheet` and `close-bottom-sheet` events. Make the section an action with `->bottomSheet()`, or let the app code show the section.
+- The panel theme needs no `@source` for `src` now.
+
 ## Limits
 
-- A section sheet uses `position: fixed`. A parent with `transform`, `filter` or `contain` breaks that position. Keep the section outside such a parent.
-- A section sheet needs an `id()` or a `key()`, so the open and close events can name it.
 - A nested action stacks on a sheet only when it calls `->overlayParentActions()`.
+- The slide-over type always has a sticky header and footer, as a Filament slide-over has by default. In the modal type and the sheet type, `stickyModalHeader()` and `stickyModalFooter()` apply as in Filament.
 - `composer serve` builds the workbench theme and starts the demo panel.
 
 ## Testing
