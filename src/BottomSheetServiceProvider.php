@@ -17,9 +17,28 @@ class BottomSheetServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Action::macro('bottomSheet', function (bool|Closure $condition = true): static {
+        // A named argument that is null does not change its option, so an
+        // alias call before ->bottomSheet() keeps its value.
+        Action::macro('bottomSheet', function (
+            bool|Closure $condition = true,
+            ?array $snapPoints = null,
+            float|int|string|null $initialHeight = null,
+            bool|Closure|null $overlay = null,
+        ): static {
             /** @var Action $this */
-            BottomSheet::for($this)->enabled($condition);
+            $sheet = BottomSheet::for($this)->enabled($condition);
+
+            if ($snapPoints !== null) {
+                $sheet->snapPoints($snapPoints);
+            }
+
+            if ($initialHeight !== null) {
+                $sheet->initialHeight($initialHeight);
+            }
+
+            if ($overlay !== null) {
+                $sheet->overlay($overlay);
+            }
 
             return $this;
         });
@@ -38,6 +57,9 @@ class BottomSheetServiceProvider extends ServiceProvider
             return $this;
         });
 
+        /**
+         * @deprecated Use ->bottomSheet(snapPoints: ...).
+         */
         Action::macro('bottomSheetSnapPoints', function (array $points): static {
             /** @var Action $this */
             BottomSheet::for($this)->snapPoints($points);
@@ -45,6 +67,9 @@ class BottomSheetServiceProvider extends ServiceProvider
             return $this;
         });
 
+        /**
+         * @deprecated Use ->bottomSheet(initialHeight: ...).
+         */
         Action::macro('bottomSheetInitialHeight', function (float|int|string $height): static {
             /** @var Action $this */
             BottomSheet::for($this)->initialHeight($height);
@@ -52,6 +77,9 @@ class BottomSheetServiceProvider extends ServiceProvider
             return $this;
         });
 
+        /**
+         * @deprecated Use ->bottomSheet(overlay: ...).
+         */
         Action::macro('bottomSheetOverlay', function (bool|Closure $condition = true): static {
             /** @var Action $this */
             BottomSheet::for($this)->overlay($condition);

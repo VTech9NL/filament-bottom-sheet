@@ -36,7 +36,7 @@ final class BottomSheet
     /**
      * @var list<float>
      */
-    public const array DEFAULT_SNAP_POINTS = [0.5, 0.8, 1.0];
+    public const array DEFAULT_SNAP_POINTS = [0.25, 0.5, 0.75, 1.0];
 
     public const string CONTENT_HEIGHT = 'content';
 
@@ -305,8 +305,8 @@ final class BottomSheet
 
     private static function ensureViewportPart(mixed $value, string $name): void
     {
-        if ((! is_int($value) && ! is_float($value)) || $value <= 0 || $value > 1) {
-            throw new InvalidArgumentException("A bottom sheet {$name} is a part of the viewport height, more than 0 and at most 1.");
+        if ((! is_int($value) && ! is_float($value)) || ! is_finite((float) $value) || $value <= 0 || $value > 1) {
+            throw new InvalidArgumentException("A bottom sheet {$name} is a finite part of the viewport height, more than 0 and at most 1.");
         }
     }
 }
