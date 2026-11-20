@@ -183,10 +183,16 @@ const updateStack = () =>
         sheet.setLayer(depth && Math.max(TOP_LAYER - depth, LOWEST_LAYER))
     })
 
+// The stack place of a sheet that starts again with new options, so it keeps
+// its place under the sheets that opened after it.
+let restartIndex = null
+
 const pushSheet = (sheet) => {
     if (!stack.includes(sheet)) {
-        stack.push(sheet)
+        stack.splice(restartIndex ?? stack.length, 0, sheet)
     }
+
+    restartIndex = null
 
     updateStack()
 }
@@ -853,12 +859,14 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
     })
 
     return () => {
+        const index = stack.indexOf(sheet)
+
         Alpine.release(visibility)
         sheet.destroy()
         sheet.breakpoint.removeEventListener('change', onBreakpointChange)
         window.removeEventListener('resize', onResize)
 
-        return { wasOpen: false }
+        return { wasOpen: false, index }
     }
 }
 
@@ -1074,6 +1082,7 @@ const createSectionSheet = (Alpine, el, isRestart = false) => {
     el.classList.remove(...SECTION_CLOAK_CLASSES)
 
     return () => {
+        const index = stack.indexOf(sheet)
         const wasOpen = deactivate()
 
         sheet.destroy()
@@ -1084,7 +1093,7 @@ const createSectionSheet = (Alpine, el, isRestart = false) => {
         el.removeEventListener('click', onClick)
         sheet.breakpoint.removeEventListener('change', onBreakpointChange)
 
-        return { wasOpen }
+        return { wasOpen, index }
     }
 }
 
@@ -1147,7 +1156,7 @@ const plugin = (Alpine) => {
                     return
                 }
 
-                const { wasOpen } = destroy?.() ?? {}
+                const { wasOpen, index = -1 } = destroy?.() ?? {}
 
                 destroy = null
                 state = next
@@ -1167,7 +1176,9 @@ const plugin = (Alpine) => {
                 }
 
                 el.__livewire_ignore_self = true
+                restartIndex = index === -1 ? null : index
                 destroy = create(Alpine, el, isSection ? wasOpen : true)
+                restartIndex = null
             }
 
             cleanup(() => {
