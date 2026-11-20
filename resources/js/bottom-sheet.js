@@ -131,6 +131,17 @@ const SECTION_CLASSES = [
 
 const SECTION_BACK_CLASSES = ['[&>.fi-section]:scale-94']
 
+// Hides a section sheet below the breakpoint before Alpine starts. The names
+// match `BottomSheet::HIDDEN_BELOW`. The directive removes the class when it
+// takes over, and then it hides the section itself.
+const SECTION_CLOAK_CLASSES = [
+    'max-sm:hidden',
+    'max-md:hidden',
+    'max-lg:hidden',
+    'max-xl:hidden',
+    'max-2xl:hidden',
+]
+
 // The part of the viewport height at which the sheet opens when the content
 // height cannot be measured.
 const FALLBACK_HEIGHT = 0.5
@@ -925,8 +936,12 @@ const createSectionSheet = (Alpine, el, { cleanup }) => {
     sheet.breakpoint.addEventListener('change', onBreakpointChange)
 
     if (sheet.breakpoint.matches) {
+        // `hidden` is set first, so the section stays hidden when the
+        // first-paint class is removed.
         activate()
     }
+
+    el.classList.remove(...SECTION_CLOAK_CLASSES)
 
     cleanup(() => {
         deactivate()

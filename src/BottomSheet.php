@@ -32,6 +32,22 @@ final class BottomSheet
     public const string DEFAULT_UNTIL = 'md';
 
     /**
+     * Tailwind utilities that hide a section sheet below the breakpoint
+     * before Alpine starts. The directive removes the class when it takes
+     * over. Each name is a literal, so a panel theme `@source` of this file
+     * finds it.
+     *
+     * @var array<string, string>
+     */
+    public const array HIDDEN_BELOW = [
+        'sm' => 'max-sm:hidden',
+        'md' => 'max-md:hidden',
+        'lg' => 'max-lg:hidden',
+        'xl' => 'max-xl:hidden',
+        '2xl' => 'max-2xl:hidden',
+    ];
+
+    /**
      * @var list<float>
      */
     public const array DEFAULT_SNAP_POINTS = [0.5, 0.8, 1.0];
@@ -183,6 +199,9 @@ final class BottomSheet
                 'data-bottom-sheet-overlay' => '',
             ],
             self::PART_SECTION => [
+                // Hide the section below the breakpoint from the first paint.
+                // The directive removes this class when it takes over.
+                'class' => self::HIDDEN_BELOW[$this->until],
                 // The state of the focus trap and the page scroll lock of the
                 // Alpine focus plugin, which the directive sets.
                 'x-data' => '{ isBottomSheetOpen: false }',

@@ -18,6 +18,18 @@ it('marks the section as a bottom sheet with its id and the default options', fu
         ->toContain('data-bottom-sheet-initial-height="content"');
 });
 
+it('hides a section sheet below the breakpoint before Alpine starts', function (string $until, string $class): void {
+    $html = renderSection(Section::make('Room')->id('room')->bottomSheet($until));
+
+    expect(openingTag($html, 'fi-sc-section'))->toContain($class);
+})->with([
+    'sm' => ['sm', 'max-sm:hidden'],
+    'md' => ['md', 'max-md:hidden'],
+    'lg' => ['lg', 'max-lg:hidden'],
+    'xl' => ['xl', 'max-xl:hidden'],
+    '2xl' => ['2xl', 'max-2xl:hidden'],
+]);
+
 it('uses the section key as the sheet id when the section has no id', function (): void {
     $html = renderSection(Section::make('Room')->key('room-key')->bottomSheet());
 
@@ -51,7 +63,9 @@ it('keeps the other attributes of the section', function (): void {
 it('adds no attribute when the bottom sheet is disabled', function (bool|Closure $condition): void {
     $html = renderSection(Section::make('Room')->id('room')->bottomSheet($condition));
 
-    expect($html)->not->toContain('bottom-sheet');
+    expect($html)
+        ->not->toContain('bottom-sheet')
+        ->not->toContain('max-md:hidden');
 })->with([
     'false' => [false],
     'a closure that gives false' => [fn (): Closure => fn (Section $section): bool => $section->getId() !== 'room'],
