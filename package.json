@@ -1,0 +1,11 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "esbuild resources/js/bottom-sheet.js --bundle --minify --format=iife --target=es2020 --outfile=resources/dist/bottom-sheet.js",
+        "dev": "npm run build -- --watch"
+    },
+    "devDependencies": {
+        "esbuild": "^0.25.0"
+    }
+}

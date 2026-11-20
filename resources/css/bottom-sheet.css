@@ -1,0 +1,39 @@
+/*
+ * Only what a Tailwind utility cannot do. Each rule is scoped to
+ * `.fi-bottom-sheet`, which the `x-bottom-sheet` directive puts on a modal
+ * window below the breakpoint only.
+ *
+ * Filament's modal enter and leave classes scale and fade the window. A sheet
+ * does not: the directive moves it up with a spring when it opens, and these
+ * rules move it down when Filament closes it (Escape, a backdrop tap, a close
+ * from the server).
+ */
+.fi-modal-window.fi-bottom-sheet:is(
+        .fi-transition-enter,
+        .fi-transition-enter-start,
+        .fi-transition-enter-end,
+        .fi-transition-leave,
+        .fi-transition-leave-start,
+        .fi-transition-leave-end
+    ) {
+    opacity: 1;
+    scale: none;
+}
+
+.fi-modal-window.fi-bottom-sheet.fi-transition-enter {
+    transition: none !important;
+}
+
+.fi-modal-window.fi-bottom-sheet.fi-transition-leave {
+    transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+
+.fi-modal-window.fi-bottom-sheet.fi-transition-leave-end {
+    transform: translate3d(0, calc(100% + 2rem), 0) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fi-modal-window.fi-bottom-sheet.fi-transition-leave {
+        transition: none !important;
+    }
+}
