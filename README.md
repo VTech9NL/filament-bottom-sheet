@@ -228,6 +228,10 @@ Each `detail` has `id`, `height` (the visible height in px, `0` when closed) and
 
 With `overlay` true or false, the page does not scroll while the sheet is open. At the close of an element sheet, the focus goes back to the element that opened it. A `pass` sheet is for a part that stays open while the user works on the page, for example a chat.
 
+With two sheets open, only the top sheet takes an outside tap, Escape and the focus. A sheet under the top sheet lets a tap through and does not trap the focus. When it is the top sheet again, it takes the outside tap and traps the focus again.
+
+A Filament modal that is not a bottom sheet is not in the sheet stack. When such a modal opens over an element sheet, Escape closes the element sheet, not the modal.
+
 ## Rules
 
 These rules stop a wrong combination at once, with an `InvalidArgumentException`:

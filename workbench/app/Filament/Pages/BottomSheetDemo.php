@@ -91,6 +91,13 @@ class BottomSheetDemo extends Page
             $this->editAction('noOverlay', 'Sheet, no overlay')
                 ->color('gray')
                 ->modalDescription('A sheet with no dark layer. A tap outside closes it.')
+                ->extraModalFooterActions([
+                    // A second sheet over the first one.
+                    Action::make('chatOver')
+                        ->label('Chat')
+                        ->color('gray')
+                        ->alpineClickHandler("\$dispatch('bottom-sheet:open', { id: 'chat' })"),
+                ])
                 ->bottomSheet(initialHeight: 0.75, overlay: false),
             Action::make('chat')
                 ->label('Chat')
