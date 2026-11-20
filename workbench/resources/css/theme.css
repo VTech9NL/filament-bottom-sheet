@@ -1,0 +1,5 @@
+@import '../../../vendor/filament/filament/resources/css/theme.css';
+
+/* The package classes, as the README tells a host panel theme to add. */
+@source '../../../resources/js';
+@source '../../app';

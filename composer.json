@@ -37,12 +37,22 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "VTech9NL\\BottomSheet\\Tests\\": "tests"
+            "VTech9NL\\BottomSheet\\Tests\\": "tests",
+            "Workbench\\App\\": "workbench/app/"
         }
     },
     "scripts": {
         "format": "vendor/bin/pint",
-        "test": "vendor/bin/pest"
+        "test": "vendor/bin/pest",
+        "workbench:css": [
+            "npm install --no-save --silent tailwindcss@4 @tailwindcss/cli@4",
+            "npx tailwindcss --input workbench/resources/css/theme.css --output workbench/public/theme.css --minify"
+        ],
+        "serve": [
+            "@workbench:css",
+            "@php vendor/bin/testbench workbench:build --ansi",
+            "@php vendor/bin/testbench serve --ansi"
+        ]
     },
     "config": {
         "sort-packages": true,

@@ -13,3 +13,15 @@ providers:
   - Livewire\LivewireServiceProvider
   - RyanChandler\BladeCaptureDirective\BladeCaptureDirectiveServiceProvider
   - VTech9NL\BottomSheet\BottomSheetServiceProvider
+  - Workbench\App\Providers\AdminPanelProvider
+
+workbench:
+  start: '/admin/bottom-sheet-demo'
+  install: true
+  discovers:
+    web: true
+  build:
+    - asset-publish
+    - filament:assets
+    - create-sqlite-db
+    - migrate-fresh
