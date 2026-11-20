@@ -11,7 +11,7 @@ it('marks the modal window and the overlay as a bottom sheet at each width', fun
     expect(openingTag($html, 'fi-modal-window'))
         ->toContain('x-bottom-sheet=""')
         ->toContain('wire:ignore.self=""')
-        ->toContain('data-bottom-sheet-snap-points="[0.5,0.8,1]"')
+        ->toContain('data-bottom-sheet-snap-points="[0.25,0.5,0.75,1]"')
         ->toContain('data-bottom-sheet-initial-height="content"')
         ->not->toContain('data-bottom-sheet-modal-from')
         ->not->toContain('data-bottom-sheet-slide-over-from')
@@ -89,6 +89,50 @@ it('gives the snap points in order and the initial height, in each order of the 
     }
 });
 
+it('sets the options with the named arguments of the bottom sheet', function (): void {
+    $action = Action::make('edit')->bottomSheet(snapPoints: [1, 0.4], initialHeight: 0.75, overlay: false);
+
+    expect(openingTag(renderActionModal($action), 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-snap-points="[0.4,1]"')
+        ->toContain('data-bottom-sheet-initial-height="0.75"')
+        ->toContain('data-bottom-sheet-overlay="false"');
+});
+
+it('keeps the value of an alias when a named argument is null', function (): void {
+    $action = Action::make('edit')
+        ->bottomSheetSnapPoints([0.3, 0.9])
+        ->bottomSheetInitialHeight(0.3)
+        ->bottomSheetOverlay(false)
+        ->bottomSheet();
+
+    expect(openingTag(renderActionModal($action), 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-snap-points="[0.3,0.9]"')
+        ->toContain('data-bottom-sheet-initial-height="0.3"')
+        ->toContain('data-bottom-sheet-overlay="false"');
+});
+
+it('uses the value of the last call, a named argument or an alias', function (): void {
+    $aliasLast = Action::make('edit')
+        ->bottomSheet(snapPoints: [0.5, 1], initialHeight: 0.5, overlay: false)
+        ->bottomSheetSnapPoints([0.2, 0.8])
+        ->bottomSheetInitialHeight(0.8)
+        ->bottomSheetOverlay();
+    $argumentLast = Action::make('edit')
+        ->bottomSheetSnapPoints([0.2, 0.8])
+        ->bottomSheetInitialHeight(0.8)
+        ->bottomSheetOverlay()
+        ->bottomSheet(snapPoints: [0.5, 1], initialHeight: 'content', overlay: false);
+
+    expect(openingTag(renderActionModal($aliasLast), 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-snap-points="[0.2,0.8]"')
+        ->toContain('data-bottom-sheet-initial-height="0.8"')
+        ->not->toContain('data-bottom-sheet-overlay')
+        ->and(openingTag(renderActionModal($argumentLast), 'fi-modal-window'))
+        ->toContain('data-bottom-sheet-snap-points="[0.5,1]"')
+        ->toContain('data-bottom-sheet-initial-height="content"')
+        ->toContain('data-bottom-sheet-overlay="false"');
+});
+
 it('keeps the other modal window attributes of the action', function (): void {
     $action = Action::make('edit')
         ->extraModalWindowAttributes(['data-app' => 'kept'])
@@ -144,6 +188,10 @@ it('may not use an unknown breakpoint, one breakpoint for two types or an invali
     'a snap point of 0' => [fn (Action $action) => $action->bottomSheetSnapPoints([0]), 'snap point'],
     'an initial height name' => [fn (Action $action) => $action->bottomSheetInitialHeight('auto'), 'initial height'],
     'an initial height above 1' => [fn (Action $action) => $action->bottomSheetInitialHeight(1.5), 'initial height'],
+    'a snap point that is not a number' => [fn (Action $action) => $action->bottomSheetSnapPoints([NAN]), 'finite'],
+    'an initial height that is not a number' => [fn (Action $action) => $action->bottomSheet(initialHeight: NAN), 'finite'],
+    'an infinite initial height' => [fn (Action $action) => $action->bottomSheet(initialHeight: INF), 'finite'],
+    'a named snap point above 1' => [fn (Action $action) => $action->bottomSheet(snapPoints: [2]), 'snap point'],
 ]);
 
 it('may not combine the bottom sheet with a slide-over or no modal, in each order', function (Closure $configure): void {
