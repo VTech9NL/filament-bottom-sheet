@@ -166,7 +166,9 @@ const stack = []
 
 // The topmost sheet keeps the `z-40` of its classes (a Filament modal also has
 // `z-40`). Each sheet under it gets a lower layer, so the sheet that opened
-// last is on top, whatever its place in the DOM.
+// last is on top, whatever its place in the DOM. The layers have a step of 2:
+// the outside hit area of a sheet is one layer below the sheet, and above
+// the sheet under it.
 const TOP_LAYER = 40
 
 const LOWEST_LAYER = 31
@@ -176,7 +178,7 @@ const updateStack = () =>
         const depth = stack.length - 1 - index
 
         sheet.moveBack(depth > 0)
-        sheet.setLayer(depth && Math.max(TOP_LAYER - depth, LOWEST_LAYER))
+        sheet.setLayer(depth && Math.max(TOP_LAYER - 2 * depth, LOWEST_LAYER))
     })
 
 // The stack place of a sheet that starts again with new options, so it keeps
@@ -836,6 +838,34 @@ const createModalSheet = (Alpine, el, isRestart = false) => {
 
     sheet.isOpen = () => modal.isOpen
 
+    // Only the top sheet takes an outside tap and traps the focus. Under a
+    // newer sheet, the window container lets a tap through (the window still
+    // takes it), and the Filament focus trap stops until the sheet is on top
+    // again.
+    let isTrapHeld = false
+    const setLayer = sheet.setLayer
+
+    sheet.setLayer = (layer) => {
+        setLayer(layer)
+
+        const isUnder = !!layer && sheet.isActive
+        const container = root.querySelector(':scope > .fi-modal-window-ctn')
+
+        if (container) {
+            container.style.pointerEvents = isUnder ? 'none' : ''
+        }
+
+        el.style.pointerEvents = isUnder ? 'auto' : ''
+
+        if (isUnder && modal.isTrapActive) {
+            isTrapHeld = true
+            modal.isTrapActive = false
+        } else if (!isUnder && isTrapHeld) {
+            isTrapHeld = false
+            modal.isTrapActive = modal.isOpen
+        }
+    }
+
     // The window types from a breakpoint, from the widest breakpoint to the
     // narrowest. Below each breakpoint, the window is a sheet.
     const types = [
@@ -1114,7 +1144,9 @@ const createElementSheet = (
             : el.dataset.bottomSheetOverlay === 'false'
               ? 'close'
               : 'overlay'
-    const trap = Alpine.reactive({ isActive: false })
+    // `isUnder`: a newer sheet is on top, so the trap stops until this sheet
+    // is on top again.
+    const trap = Alpine.reactive({ isActive: false, isUnder: false })
 
     let isOpen = false
     let opener = null
@@ -1199,14 +1231,20 @@ const createElementSheet = (
 
     sheet.isOpen = () => isOpen
 
-    // The outside hit area is under the sheet: one layer below it.
+    // The outside hit area is under the sheet: one layer below it. Only the
+    // top sheet takes an outside tap and traps the focus.
     const setLayer = sheet.setLayer
 
     sheet.setLayer = (layer) => {
         setLayer(layer)
 
+        const isUnder = !!layer && sheet.isActive
+
+        trap.isUnder = isUnder
+
         if (backdrop) {
-            backdrop.style.zIndex = `${(layer && sheet.isActive ? layer : TOP_LAYER) - 1}`
+            backdrop.style.zIndex = `${(isUnder ? layer : TOP_LAYER) - 1}`
+            backdrop.style.pointerEvents = isUnder ? 'none' : ''
         }
     }
 
@@ -1255,7 +1293,8 @@ const createElementSheet = (
         }
 
         releaseTrap ??= Alpine.bind(el, {
-            'x-trap.noautofocus.noreturn': () => trap.isActive,
+            'x-trap.noautofocus.noreturn': () =>
+                trap.isActive && !trap.isUnder,
         })
         trap.isActive = true
         el.querySelector('[data-bottom-sheet-handle]')?.focus({
@@ -1379,12 +1418,21 @@ const createElementSheet = (
 
     const onCloseEvent = (event) => event.detail?.id === id && close('event')
 
-    const onKeyDown = (event) =>
-        event.key === 'Escape' &&
-        isOpen &&
-        sheet.isActive &&
-        isTopmostSheet(sheet) &&
+    // Only the top sheet takes Escape: the capture phase stops it before the
+    // Filament modal under the sheet gets it.
+    const onKeyDown = (event) => {
+        if (
+            event.key !== 'Escape' ||
+            !isOpen ||
+            !sheet.isActive ||
+            !isTopmostSheet(sheet)
+        ) {
+            return
+        }
+
+        event.stopPropagation()
         close('escape')
+    }
 
     const onViewportChange = () => {
         if (!sheet.isActive || !isOpen || sheet.isDragging()) {
@@ -1397,7 +1445,7 @@ const createElementSheet = (
 
     window.addEventListener('bottom-sheet:open', onOpenEvent)
     window.addEventListener('bottom-sheet:close', onCloseEvent)
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     const unwatchViewport = watchViewport(onViewportChange)
 
     // New options while the sheet is open: it stays open, with no new open
@@ -1411,7 +1459,7 @@ const createElementSheet = (
 
         window.removeEventListener('bottom-sheet:open', onOpenEvent)
         window.removeEventListener('bottom-sheet:close', onCloseEvent)
-        window.removeEventListener('keydown', onKeyDown)
+        window.removeEventListener('keydown', onKeyDown, true)
         unwatchViewport()
         stopTrap()
         releaseTrap?.()
