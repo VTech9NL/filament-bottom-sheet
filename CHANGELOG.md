@@ -12,10 +12,11 @@ The bottom sheet is the mobile-first window type of a Filament action.
 
 ### Added
 
+- `->bottomSheetOverlay(false)`: the sheet type has no dark layer, and the page behind stays visible and usable.
 - `->modalFrom($breakpoint)`: from the breakpoint and up, the action is the Filament modal.
 - `->slideOverFrom($breakpoint)`: from the breakpoint and up, the action is a Filament slide-over.
 - A resize changes the window type of an open action, with no close and no loss of the form data.
-- Conflict checks: `->bottomSheet()` with `->slideOver()` or `->modal(false)`, `->modalFrom()` or `->slideOverFrom()` without `->bottomSheet()`, and one breakpoint for the two types throw an `InvalidArgumentException`.
+- Conflict checks: `->bottomSheet()` with `->slideOver()` or `->modal(false)`, `->modalFrom()`, `->slideOverFrom()` or `->bottomSheetOverlay()` without `->bottomSheet()`, and one breakpoint for the two types throw an `InvalidArgumentException`.
 
 ## v0.1.0 - 2026-11-20
 

@@ -79,6 +79,16 @@ Action::make('edit')
     ->bottomSheet();
 ```
 
+### A sheet with no dark layer
+
+```php
+Action::make('edit')
+    ->bottomSheet()
+    ->bottomSheetOverlay(false);
+```
+
+The page behind the sheet stays visible. It takes taps and it scrolls. The modal type and the slide-over type keep the Filament overlay.
+
 ### A sheet, then a slide-over
 
 ```php
@@ -129,7 +139,7 @@ In a modal or a slide-over, a nested action behaves as in Filament.
 These rules stop a wrong combination at once, with an `InvalidArgumentException`:
 
 - `->bottomSheet()` cannot be used with `->slideOver()` or `->modal(false)`. Use `->slideOverFrom()` or `->modalFrom()`.
-- `->modalFrom()` and `->slideOverFrom()` need `->bottomSheet()`.
+- `->modalFrom()`, `->slideOverFrom()` and `->bottomSheetOverlay()` need `->bottomSheet()`.
 - `->modalFrom()` and `->slideOverFrom()` cannot use the same breakpoint.
 - A breakpoint name must be one of the names below.
 
@@ -140,6 +150,7 @@ The macros can be called in each order. The plugin checks the conflicts when Fil
 | Method | Default | Effect |
 | --- | --- | --- |
 | `bottomSheet($condition)` | on | The action is a sheet at each width that has no other type. `false`, or a closure that returns `false`, renders the action as Filament does. |
+| `bottomSheetOverlay($condition)` | on | `false` hides the dark layer of the sheet type. The page behind stays visible and usable. The modal type and the slide-over type keep the overlay. |
 | `modalFrom($breakpoint)` | none | From this breakpoint and up, the action is the Filament modal. |
 | `slideOverFrom($breakpoint)` | none | From this breakpoint and up, the action is a Filament slide-over. `slideOverPosition()` sets its side. |
 | `bottomSheetSnapPoints($points)` | `[0.5, 0.8, 1.0]` | Heights where the sheet can rest, as parts of the viewport height. |
