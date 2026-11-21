@@ -1541,6 +1541,7 @@ const OPTION_ATTRIBUTES = [
     'data-bottom-sheet-snap-points',
     'data-bottom-sheet-initial-height',
     'data-bottom-sheet-overlay',
+    'data-bottom-sheet-stack',
     // The element sheet only.
     'data-bottom-sheet-id',
     'data-bottom-sheet-outside',
@@ -1557,6 +1558,36 @@ const stateOf = (el, directive) =>
 // update, the directive compares the new markup with its state: when the
 // condition or an option changes, it starts again with the new state.
 const onMorph = ({ el, toEl }) => el._bottomSheetSync?.(toEl)
+
+// With the global switch, the server marks each sheet window with
+// `data-bottom-sheet-stack`. A nested action of such a window stacks on it
+// while it is a sheet, as with `->overlayParentActions()`. From the
+// breakpoint, Filament nests the modals as it does by default. This capture
+// listener runs before the listener of the Filament action modals.
+const stackNestedActions = (event) => {
+    const detail = event.detail
+
+    if (
+        !detail ||
+        detail.shouldOverlayParentActions ||
+        !(detail.newActionNestingIndex > 0)
+    ) {
+        return
+    }
+
+    const parent = document.getElementById(
+        `fi-${detail.id}-action-${detail.newActionNestingIndex - 1}`,
+    )
+    const parentWindow = parent?.querySelector(
+        '.fi-modal-window[data-bottom-sheet-stack]',
+    )
+
+    if (parentWindow?.classList.contains('fi-bottom-sheet')) {
+        detail.shouldOverlayParentActions = true
+    }
+}
+
+window.addEventListener('sync-action-modals', stackNestedActions, true)
 
 const plugin = (Alpine) => {
     if (window.Livewire) {
