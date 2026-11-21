@@ -65,20 +65,42 @@
 }
 
 /*
- * The top edge of the footer, while the content scrolls under it: the
- * directive sets `data-bottom-sheet-scrolled-under` on the sheet until the
- * body is at its end. The line is a shadow, so the footer keeps its height.
+ * The header of an action sheet. It stays at the top while the body scrolls,
+ * but a Filament modal header has no background and no bottom padding: the
+ * scrolled content showed right under the heading text. The header has the
+ * surface of the sheet and sits above the body. The sheet moves the space
+ * under the header from the body (the `py-6` of `.fi-modal-content`) into the
+ * header, so the content never scrolls under the heading.
+ */
+.fi-modal-window.fi-bottom-sheet:has(> .fi-modal-header) > .fi-modal-content {
+    padding-top: 0;
+}
+
+.fi-modal-window.fi-bottom-sheet > .fi-modal-header {
+    position: relative;
+    z-index: 1;
+    background-color: inherit;
+    padding-bottom: 1.5rem;
+}
+
+/*
+ * The edges, while the content scrolls: the directive sets
+ * `data-bottom-sheet-scrolled-under` on the sheet until the body is at its
+ * end (the top edge of the footer), and `data-bottom-sheet-scrolled` while
+ * the body is not at its top (the bottom edge of the header). The line is a
+ * shadow, so the header and the footer keep their height.
  */
 .fi-bottom-sheet {
-    --bottom-sheet-footer-rule: var(--gray-200, rgb(229 231 235));
-    --bottom-sheet-footer-shadow: rgb(0 0 0 / 0.08);
+    --bottom-sheet-edge-rule: var(--gray-200, rgb(229 231 235));
+    --bottom-sheet-edge-shadow: rgb(0 0 0 / 0.08);
 }
 
 :where(.dark) .fi-bottom-sheet {
-    --bottom-sheet-footer-rule: rgb(255 255 255 / 0.1);
-    --bottom-sheet-footer-shadow: rgb(0 0 0 / 0.4);
+    --bottom-sheet-edge-rule: rgb(255 255 255 / 0.1);
+    --bottom-sheet-edge-shadow: rgb(0 0 0 / 0.4);
 }
 
+.fi-bottom-sheet > .fi-modal-header,
 .fi-bottom-sheet > .fi-modal-footer,
 .fi-bottom-sheet [data-bottom-sheet-footer] {
     transition: box-shadow 150ms ease-out;
@@ -89,11 +111,18 @@
     position: relative;
     z-index: 1;
     box-shadow:
-        0 -1px 0 0 var(--bottom-sheet-footer-rule),
-        0 -8px 16px -8px var(--bottom-sheet-footer-shadow);
+        0 -1px 0 0 var(--bottom-sheet-edge-rule),
+        0 -8px 16px -8px var(--bottom-sheet-edge-shadow);
+}
+
+.fi-bottom-sheet[data-bottom-sheet-scrolled] > .fi-modal-header {
+    box-shadow:
+        0 1px 0 0 var(--bottom-sheet-edge-rule),
+        0 8px 16px -8px var(--bottom-sheet-edge-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .fi-bottom-sheet > .fi-modal-header,
     .fi-bottom-sheet > .fi-modal-footer,
     .fi-bottom-sheet [data-bottom-sheet-footer] {
         transition: none;

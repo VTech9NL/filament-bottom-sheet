@@ -766,10 +766,12 @@ const createSheet = (part) => {
         springTo(highest())
     }
 
-    // The footer edge: while the body can scroll and is not at its end, the
-    // host has `data-bottom-sheet-scrolled-under`, and the CSS shows a line
-    // and a shadow on the footer. A scroll, a resize of the body or of its
-    // children, and a change of the markup measure it again, once a frame.
+    // The edges: while the body can scroll and is not at its end, the host
+    // has `data-bottom-sheet-scrolled-under`, and the CSS shows a line and a
+    // shadow on the footer. While the body is not at its top, the host has
+    // `data-bottom-sheet-scrolled`, and the CSS shows them under the header.
+    // A scroll, a resize of the body or of its children, and a change of the
+    // markup measure them again, once a frame.
     let edgeFrame = null
     let edgeBody = null
     // A second `observe()` of a target reports it again: observe each once.
@@ -799,6 +801,10 @@ const createSheet = (part) => {
             'data-bottom-sheet-scrolled-under',
             !!body &&
                 body.scrollTop + body.clientHeight < body.scrollHeight - 1,
+        )
+        host.toggleAttribute(
+            'data-bottom-sheet-scrolled',
+            !!body && body.scrollTop > 0,
         )
     }
 
@@ -832,11 +838,14 @@ const createSheet = (part) => {
             handleObserver.observe(target, { childList: true })
         }
 
-        // A morph can remove the attribute: the observer sets it again.
+        // A morph can remove the attributes: the observer sets them again.
         edgeMarkup.observe(host, {
             childList: true,
             subtree: true,
-            attributeFilter: ['data-bottom-sheet-scrolled-under'],
+            attributeFilter: [
+                'data-bottom-sheet-scrolled-under',
+                'data-bottom-sheet-scrolled',
+            ],
         })
         scheduleEdge()
     }
@@ -853,6 +862,7 @@ const createSheet = (part) => {
         cancelAnimationFrame(edgeFrame)
         edgeFrame = null
         host.removeAttribute('data-bottom-sheet-scrolled-under')
+        host.removeAttribute('data-bottom-sheet-scrolled')
         addedHandle?.remove()
         host.classList.remove(...part.classes, ...part.backClasses)
         part.clear()
