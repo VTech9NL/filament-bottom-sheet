@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.2 - 2026-11-21
+
+### Fixed
+
+- The header of an action sheet has the surface of the sheet as its background, and it is above the body. Before, the header had no background and no bottom padding: the scrolled content showed right under the heading text. The space under the header (1.5rem, the top padding of the body) is now in the header, so it does not scroll away with the content.
+- While the content is scrolled from the top, the header of an action sheet shows a bottom line in the theme border colour and a soft shadow, as the footer edge of v0.3.1. At the top, it shows no line. The sheet has `data-bottom-sheet-scrolled` in that state.
+
 ## v0.3.1 - 2026-11-21
 
 ### Fixed
