@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1
+
+### Added
+
+- A focus on a text field in the top sheet moves the sheet to its highest snap point, as the keyboard opens. The `bottom-sheet:resize` event gives the reason `focus`. The focus of the Filament autofocus, at the open, does not move the sheet.
+
 ## v0.2.0 - 2026-11-21
 
 The bottom sheet is the mobile-first window type of a Filament action.
