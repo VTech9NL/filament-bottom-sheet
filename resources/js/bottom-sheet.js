@@ -766,6 +766,51 @@ const createSheet = (part) => {
         springTo(highest())
     }
 
+    // The footer edge: while the body can scroll and is not at its end, the
+    // host has `data-bottom-sheet-scrolled-under`, and the CSS shows a line
+    // and a shadow on the footer. A scroll, a resize of the body or of its
+    // children, and a change of the markup measure it again, once a frame.
+    let edgeFrame = null
+    let edgeBody = null
+    // A second `observe()` of a target reports it again: observe each once.
+    let edgeWatched = new WeakSet()
+
+    const updateEdge = () => {
+        edgeFrame = null
+
+        const body = sheet.isActive ? part.content() : null
+
+        if (body !== edgeBody) {
+            edgeBody = body
+            edgeSizes.disconnect()
+            edgeWatched = new WeakSet()
+        }
+
+        if (body) {
+            ;[body, ...body.children].forEach((node) => {
+                if (!edgeWatched.has(node)) {
+                    edgeWatched.add(node)
+                    edgeSizes.observe(node)
+                }
+            })
+        }
+
+        host.toggleAttribute(
+            'data-bottom-sheet-scrolled-under',
+            !!body &&
+                body.scrollTop + body.clientHeight < body.scrollHeight - 1,
+        )
+    }
+
+    const scheduleEdge = () => {
+        if (sheet.isActive) {
+            edgeFrame ??= requestAnimationFrame(updateEdge)
+        }
+    }
+
+    const edgeSizes = new ResizeObserver(scheduleEdge)
+    const edgeMarkup = new MutationObserver(scheduleEdge)
+
     sheet.moveBack = (isBack) =>
         part.backClasses.forEach((name) =>
             host.classList.toggle(name, isBack && sheet.isActive),
@@ -786,6 +831,14 @@ const createSheet = (part) => {
         if (addedHandle && target) {
             handleObserver.observe(target, { childList: true })
         }
+
+        // A morph can remove the attribute: the observer sets it again.
+        edgeMarkup.observe(host, {
+            childList: true,
+            subtree: true,
+            attributeFilter: ['data-bottom-sheet-scrolled-under'],
+        })
+        scheduleEdge()
     }
 
     sheet.deactivate = () => {
@@ -793,6 +846,13 @@ const createSheet = (part) => {
         sheet.halt()
         removeSheet(sheet)
         handleObserver.disconnect()
+        edgeMarkup.disconnect()
+        edgeSizes.disconnect()
+        edgeBody = null
+        edgeWatched = new WeakSet()
+        cancelAnimationFrame(edgeFrame)
+        edgeFrame = null
+        host.removeAttribute('data-bottom-sheet-scrolled-under')
         addedHandle?.remove()
         host.classList.remove(...part.classes, ...part.backClasses)
         part.clear()
@@ -805,6 +865,8 @@ const createSheet = (part) => {
     host.addEventListener('pointerdown', onPointerDown)
     host.addEventListener('keydown', onKeyDown)
     host.addEventListener('focusin', onFocusIn)
+    // A scroll does not bubble: the capture phase sees the scroll of the body.
+    host.addEventListener('scroll', scheduleEdge, true)
 
     sheet.destroy = () => {
         sheet.deactivate()
@@ -815,6 +877,7 @@ const createSheet = (part) => {
         host.removeEventListener('pointerdown', onPointerDown)
         host.removeEventListener('keydown', onKeyDown)
         host.removeEventListener('focusin', onFocusIn)
+        host.removeEventListener('scroll', scheduleEdge, true)
         window.removeEventListener('pointermove', onPointerMove)
         window.removeEventListener('pointerup', onPointerUp)
     }

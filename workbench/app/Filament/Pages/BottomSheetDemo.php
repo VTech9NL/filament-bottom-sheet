@@ -199,7 +199,7 @@ class BottomSheetDemo extends Page
             >
                 <p class="px-4 pt-2 pb-2 text-base font-semibold text-gray-950 dark:text-white">Chat</p>
                 <ul data-bottom-sheet-content class="divide-y divide-gray-100 px-4 text-sm text-gray-700 dark:divide-white/10 dark:text-gray-300">{$lines}</ul>
-                <form data-bottom-sheet-footer wire:submit="send" class="flex gap-2 border-t border-gray-200 p-3 dark:border-white/10">
+                <form data-bottom-sheet-footer wire:submit="send" class="flex gap-2 p-3">
                     <input
                         wire:model="message"
                         type="text"
