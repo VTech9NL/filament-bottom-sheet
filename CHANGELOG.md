@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.1 - 2026-11-21
+
+### Fixed
+
+- The footer of an action sheet has the Filament modal footer padding (1.5rem) above and below its buttons. Before, the space above the footer was the bottom padding of the body, and it scrolled away with the content: the last field touched the buttons.
+- While the content scrolls under the footer, the footer of an action sheet and the `[data-bottom-sheet-footer]` of an element sheet show a top line in the theme border colour and a soft shadow. At the end of the content, or when nothing scrolls, they show no line. The sheet has `data-bottom-sheet-scrolled-under` in that state.
+
 ## v0.3.0 - 2026-11-21
 
 ### Added

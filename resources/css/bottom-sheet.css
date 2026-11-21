@@ -43,3 +43,59 @@
         transition: none !important;
     }
 }
+
+/*
+ * The footer of an action sheet. A Filament modal puts the space above its
+ * footer in the body (the `py-6` of `.fi-modal-content`), and the footer has
+ * a bottom padding only. In a sheet the body scrolls, so that space scrolls
+ * away with the content, and the last field touches the buttons. The sheet
+ * moves the space into the footer: the same 1.5rem as a Filament modal.
+ */
+.fi-modal-window.fi-bottom-sheet:has(> .fi-modal-footer) > .fi-modal-content {
+    padding-bottom: 0;
+}
+
+.fi-modal-window.fi-bottom-sheet > .fi-modal-footer {
+    position: relative;
+    z-index: 1;
+    margin-top: 0;
+    border-top-width: 0;
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+/*
+ * The top edge of the footer, while the content scrolls under it: the
+ * directive sets `data-bottom-sheet-scrolled-under` on the sheet until the
+ * body is at its end. The line is a shadow, so the footer keeps its height.
+ */
+.fi-bottom-sheet {
+    --bottom-sheet-footer-rule: var(--gray-200, rgb(229 231 235));
+    --bottom-sheet-footer-shadow: rgb(0 0 0 / 0.08);
+}
+
+:where(.dark) .fi-bottom-sheet {
+    --bottom-sheet-footer-rule: rgb(255 255 255 / 0.1);
+    --bottom-sheet-footer-shadow: rgb(0 0 0 / 0.4);
+}
+
+.fi-bottom-sheet > .fi-modal-footer,
+.fi-bottom-sheet [data-bottom-sheet-footer] {
+    transition: box-shadow 150ms ease-out;
+}
+
+.fi-bottom-sheet[data-bottom-sheet-scrolled-under] > .fi-modal-footer,
+.fi-bottom-sheet[data-bottom-sheet-scrolled-under] [data-bottom-sheet-footer] {
+    position: relative;
+    z-index: 1;
+    box-shadow:
+        0 -1px 0 0 var(--bottom-sheet-footer-rule),
+        0 -8px 16px -8px var(--bottom-sheet-footer-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fi-bottom-sheet > .fi-modal-footer,
+    .fi-bottom-sheet [data-bottom-sheet-footer] {
+        transition: none;
+    }
+}
