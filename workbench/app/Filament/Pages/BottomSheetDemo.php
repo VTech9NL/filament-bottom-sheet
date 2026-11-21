@@ -23,6 +23,9 @@ use Illuminate\Support\HtmlString;
  * The demo page: one action for each example of the README. Each one is a
  * bottom sheet on a phone, and the first one has a nested confirmation. The
  * chat is an element sheet: it stays mounted while it is closed.
+ *
+ * The panel turns on `BottomSheet::everywhere()`. The actions in the
+ * "Everywhere" section have no bottom sheet code.
  */
 class BottomSheetDemo extends Page
 {
@@ -124,6 +127,36 @@ class BottomSheetDemo extends Page
     {
         return $schema
             ->components([
+                Section::make('Everywhere')
+                    ->description('Plain Filament actions. The global switch makes each one a sheet below lg.')
+                    ->schema([
+                        Actions::make([
+                            Action::make('removeCover')
+                                ->label('Remove cover')
+                                ->color('danger')
+                                ->requiresConfirmation()
+                                ->action(fn () => Notification::make()->title('Removed')->send()),
+                            $this->editAction('payout', 'Payout details')
+                                ->color('gray')
+                                ->extraModalFooterActions([
+                                    // No ->overlayParentActions(): on a phone it
+                                    // stacks on the form sheet.
+                                    Action::make('confirmPayout')
+                                        ->label('Confirm')
+                                        ->requiresConfirmation()
+                                        ->modalDescription('A nested confirmation over the form sheet.')
+                                        ->action(fn () => Notification::make()->title('Confirmed')->send()),
+                                ]),
+                            $this->editAction('filters', 'Filters')
+                                ->color('gray')
+                                ->modalDescription('A slide-over from lg.')
+                                ->slideOver(),
+                            $this->editAction('optOut', 'Opt out')
+                                ->color('gray')
+                                ->modalDescription('->bottomSheet(false): a Filament modal at each width.')
+                                ->bottomSheet(false),
+                        ]),
+                    ]),
                 Section::make('Programme')
                     ->description('The page content, so that the page scrolls behind a window.')
                     ->schema([

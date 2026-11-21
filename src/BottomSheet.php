@@ -17,6 +17,9 @@ use WeakMap;
  * The bottom sheet is the window type of the action at each width. From the
  * breakpoint of `modalFrom()` or `slideOverFrom()` and up, the directive
  * shows the same window as the Filament modal or slide-over.
+ *
+ * `everywhere()` gives each action a sheet below a breakpoint. The action
+ * keeps its own window type from the breakpoint, and its own options.
  */
 final class BottomSheet
 {
@@ -51,6 +54,14 @@ final class BottomSheet
      */
     private static ?WeakMap $sheets = null;
 
+    /**
+     * The `->slideOver()` actions that the global switch changed to a modal
+     * with the slide-over type from its breakpoint.
+     *
+     * @var WeakMap<Action, true>|null
+     */
+    private static ?WeakMap $slideOvers = null;
+
     private bool|Closure $condition = false;
 
     private bool $isCalled = false;
@@ -73,38 +84,89 @@ final class BottomSheet
 
     private bool $overlayIsSet = false;
 
+    private bool $snapPointsIsSet = false;
+
+    private bool $initialHeightIsSet = false;
+
     /**
-     * Give the options of the action. The first call attaches the
-     * attributes to the action, as lazy closures, so the order of the macro
-     * calls does not matter.
+     * The breakpoint of the global switch: below it, the action is a sheet.
+     */
+    private ?string $below = null;
+
+    /**
+     * The options of the global switch, for each option that the action does
+     * not set.
+     */
+    private ?self $defaults = null;
+
+    /**
+     * @var array<string, Closure>
+     */
+    private array $closures = [];
+
+    /**
+     * Make each action a bottom sheet below the breakpoint. From the
+     * breakpoint, the action keeps its own window type. Call it in the boot
+     * method of a service provider.
+     *
+     * @param  array<float|int>|null  $snapPoints
+     */
+    public static function everywhere(
+        string $below = 'lg',
+        ?array $snapPoints = null,
+        float|int|string|null $initialHeight = self::CONTENT_HEIGHT,
+        bool|Closure|null $overlay = null,
+    ): void {
+        $below = self::ensureBreakpoint($below, null);
+        $defaults = new self;
+
+        if ($snapPoints !== null) {
+            $defaults->snapPoints($snapPoints);
+        }
+
+        if ($initialHeight !== null) {
+            $defaults->initialHeight($initialHeight);
+        }
+
+        if ($overlay !== null) {
+            $defaults->overlay($overlay);
+        }
+
+        Action::configureUsing(function (Action $action) use ($below, $defaults): void {
+            $sheet = self::for($action);
+            $sheet->below = $below;
+            $sheet->defaults = $defaults;
+        });
+    }
+
+    /**
+     * Give the options of the action. Each call attaches the attributes to
+     * the action, as lazy closures, so the order of the macro calls does not
+     * matter. Filament adds a closure only one time.
      */
     public static function for(Action $action): self
     {
         self::$sheets ??= new WeakMap;
 
-        if (isset(self::$sheets[$action])) {
-            return self::$sheets[$action];
-        }
-
-        $sheet = new self;
-        self::$sheets[$action] = $sheet;
-
-        $action->extraModalWindowAttributes(
-            fn (Action $action): array => $sheet->attributes(self::PART_MODAL_WINDOW, $action),
-            merge: true,
-        );
-        $action->extraModalOverlayAttributes(
-            fn (Action $action): array => $sheet->attributes(self::PART_MODAL_OVERLAY, $action),
-            merge: true,
-        );
-        // An action without a modal renders no window: its trigger button
-        // checks the conflicts.
-        $action->extraAttributes(
-            fn (Action $action): array => $sheet->attributes(self::PART_TRIGGER, $action),
-            merge: true,
-        );
+        $sheet = self::$sheets[$action] ??= new self;
+        $sheet->attach($action);
 
         return $sheet;
+    }
+
+    private function attach(Action $action): void
+    {
+        $this->closures = $this->closures ?: [
+            self::PART_MODAL_WINDOW => fn (Action $action): array => $this->attributes(self::PART_MODAL_WINDOW, $action),
+            self::PART_MODAL_OVERLAY => fn (Action $action): array => $this->attributes(self::PART_MODAL_OVERLAY, $action),
+            self::PART_TRIGGER => fn (Action $action): array => $this->attributes(self::PART_TRIGGER, $action),
+        ];
+
+        $action->extraModalWindowAttributes($this->closures[self::PART_MODAL_WINDOW], merge: true);
+        $action->extraModalOverlayAttributes($this->closures[self::PART_MODAL_OVERLAY], merge: true);
+        // An action without a modal renders no window: its trigger button
+        // checks the conflicts.
+        $action->extraAttributes($this->closures[self::PART_TRIGGER], merge: true);
     }
 
     public function enabled(bool|Closure $condition = true): self
@@ -146,6 +208,7 @@ final class BottomSheet
         sort($points);
 
         $this->snapPoints = array_values(array_unique($points, SORT_REGULAR));
+        $this->snapPointsIsSet = true;
 
         return $this;
     }
@@ -170,6 +233,7 @@ final class BottomSheet
             }
 
             $this->initialHeight = $height;
+            $this->initialHeightIsSet = true;
 
             return $this;
         }
@@ -177,6 +241,7 @@ final class BottomSheet
         self::ensureViewportPart($height, 'initial height');
 
         $this->initialHeight = (float) $height;
+        $this->initialHeightIsSet = true;
 
         return $this;
     }
@@ -191,9 +256,11 @@ final class BottomSheet
     {
         $this->ensureNoConflict($action);
 
-        if (! $action->evaluate($this->condition)) {
+        if (! $this->isEnabled($action)) {
             return [];
         }
+
+        $this->takeSlideOver($action);
 
         return match ($part) {
             // `wire:ignore.self` keeps the classes of the directive. Before a
@@ -213,18 +280,67 @@ final class BottomSheet
     }
 
     /**
+     * The explicit `->bottomSheet()` condition, else the global switch for
+     * each action that has a modal.
+     */
+    private function isEnabled(Action $action): bool
+    {
+        if ($this->isCalled) {
+            return (bool) $action->evaluate($this->condition);
+        }
+
+        return $this->below !== null && $action->hasModal() !== false;
+    }
+
+    private function isGlobal(): bool
+    {
+        return ! $this->isCalled && $this->below !== null;
+    }
+
+    /**
+     * The global switch makes a `->slideOver()` action a modal that the
+     * directive shows as a slide-over from the breakpoint. Filament reads the
+     * window attributes before the slide-over setting.
+     */
+    private function takeSlideOver(Action $action): void
+    {
+        self::$slideOvers ??= new WeakMap;
+
+        if (! $this->isGlobal() || isset(self::$slideOvers[$action]) || ! $action->isModalSlideOver()) {
+            return;
+        }
+
+        self::$slideOvers[$action] = true;
+        $action->slideOver(false);
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?string} The modal and the slide-over breakpoints.
+     */
+    private function breakpoints(Action $action): array
+    {
+        if (! $this->isGlobal() || $this->modalFrom !== null || $this->slideOverFrom !== null) {
+            return [$this->modalFrom, $this->slideOverFrom];
+        }
+
+        return isset(self::$slideOvers[$action]) ? [null, $this->below] : [$this->below, null];
+    }
+
+    /**
      * @return array<string, string>
      */
     private function options(Action $action): array
     {
         $options = [];
+        [$modalFrom, $slideOverFrom] = $this->breakpoints($action);
+        $defaults = $this->defaults ?? $this;
 
-        if ($this->modalFrom !== null) {
-            $options['data-bottom-sheet-modal-from'] = self::BREAKPOINTS[$this->modalFrom];
+        if ($modalFrom !== null) {
+            $options['data-bottom-sheet-modal-from'] = self::BREAKPOINTS[$modalFrom];
         }
 
-        if ($this->slideOverFrom !== null) {
-            $options['data-bottom-sheet-slide-over-from'] = self::BREAKPOINTS[$this->slideOverFrom];
+        if ($slideOverFrom !== null) {
+            $options['data-bottom-sheet-slide-over-from'] = self::BREAKPOINTS[$slideOverFrom];
             $options['data-bottom-sheet-slide-over-position'] = ($action->getModalSlideOverPosition() ?? SlideOverPosition::End)->value;
             // A Filament slide-over uses the action setting, or true when the
             // action has no setting. The properties are protected.
@@ -233,14 +349,20 @@ final class BottomSheet
         }
 
         // Absent when the overlay stays, so the default render does not change.
-        if ($action->evaluate($this->overlay) === false) {
+        if ($action->evaluate($this->overlayIsSet ? $this->overlay : $defaults->overlay) === false) {
             $options['data-bottom-sheet-overlay'] = 'false';
+        }
+
+        // With the global switch, a nested action stacks on this sheet while
+        // it is a sheet.
+        if ($this->below !== null) {
+            $options['data-bottom-sheet-stack'] = '';
         }
 
         return [
             ...$options,
-            'data-bottom-sheet-snap-points' => (string) json_encode($this->snapPoints),
-            'data-bottom-sheet-initial-height' => (string) $this->initialHeight,
+            'data-bottom-sheet-snap-points' => (string) json_encode($this->snapPointsIsSet ? $this->snapPoints : $defaults->snapPoints),
+            'data-bottom-sheet-initial-height' => (string) ($this->initialHeightIsSet ? $this->initialHeight : $defaults->initialHeight),
         ];
     }
 
@@ -267,14 +389,14 @@ final class BottomSheet
      */
     private function ensureNoConflict(Action $action): void
     {
-        if (! $this->isCalled && ($this->modalFrom !== null || $this->slideOverFrom !== null || $this->overlayIsSet)) {
+        if (! $this->isCalled && $this->below === null && ($this->modalFrom !== null || $this->slideOverFrom !== null || $this->overlayIsSet)) {
             throw new InvalidArgumentException(sprintf(
                 'The action [%s] uses ->modalFrom(), ->slideOverFrom() or ->bottomSheetOverlay() without ->bottomSheet().',
                 $action->getName(),
             ));
         }
 
-        if (! $action->evaluate($this->condition)) {
+        if (! $this->isEnabled($action) || $this->isGlobal()) {
             return;
         }
 

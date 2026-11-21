@@ -15,14 +15,20 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use VTech9NL\BottomSheet\BottomSheet;
 use Workbench\App\Filament\Pages\BottomSheetDemo;
 
 /**
  * The demo panel of the workbench. It has no login, so a browser opens the
- * demo page directly.
+ * demo page directly. The global switch makes each action a sheet below lg.
  */
 class AdminPanelProvider extends PanelProvider
 {
+    public function boot(): void
+    {
+        BottomSheet::everywhere();
+    }
+
     public function panel(Panel $panel): Panel
     {
         return $panel

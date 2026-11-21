@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.0 - 2026-11-21
+
+### Added
+
+- `BottomSheet::everywhere($below = 'lg', $snapPoints, $initialHeight = 'content', $overlay)`: one switch, in the `boot()` method of a service provider. Below the breakpoint, each action that opens a modal or a slide-over is a sheet, also the Filament table, bulk and confirmation actions. From the breakpoint, each action keeps its own window type.
+- With the switch, an action with `->slideOver()` is a sheet below the breakpoint and a slide-over from it.
+- With the switch, a nested action of a sheet stacks on it as a second sheet, with no `->overlayParentActions()`. From the breakpoint, Filament nests the modals as it does by default.
+- With the switch, `->bottomSheet(false)` keeps the Filament window at each width. An action with `->bottomSheet(...)` keeps its own options and breakpoints, and an option that it does not give comes from the switch.
+- With the switch, `->modalFrom()` and `->slideOverFrom()` work with no `->bottomSheet()`: they change the breakpoint of one action.
+
 ## v0.2.1 - 2026-11-21
 
 ### Added
