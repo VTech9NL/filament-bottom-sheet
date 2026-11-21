@@ -16,6 +16,7 @@ The bottom sheet is the third window type of a [Filament](https://filamentphp.co
 
 ## Features
 
+- **One switch for each action.** `BottomSheet::everywhere()` makes each action modal and slide-over a sheet on a phone, Filament's own actions too.
 - **One action, three window types.** `->bottomSheet()->modalFrom('md')->slideOverFrom('lg')` is a sheet on a phone, a modal on a tablet and a slide-over on a desktop.
 - **Phone behaviour.** Snap points at 25, 50, 75 and 100%, a free first height, drag, flick, scroll and dismiss. A second sheet stacks on the first.
 - **One sheet for each part of a page.** An action and any other element use the same motion, options and look.
@@ -76,6 +77,53 @@ A nested confirmation stacks on the first sheet:
 Filament loads the package JavaScript and a small CSS file on each panel.
 
 ## Usage
+
+### Each action a sheet on a phone
+
+Turn on the global switch in the `boot()` method of a service provider, for example `AppServiceProvider` or the panel provider:
+
+```php
+use VTech9NL\BottomSheet\BottomSheet;
+
+public function boot(): void
+{
+    BottomSheet::everywhere();
+}
+```
+
+Below `lg` (64rem), each action that opens a modal or a slide-over opens as a sheet. This includes the Filament actions, for example the table delete and bulk actions, and the confirmations. From `lg`, each action keeps its own window type:
+
+| The action | Below the breakpoint | From the breakpoint |
+| --- | --- | --- |
+| A modal or a confirmation | sheet | Filament modal |
+| `->slideOver()` | sheet | Filament slide-over, with its position and sticky settings |
+| `->modal(false)` or no modal | no window | no window |
+| `->bottomSheet(false)` | Filament modal | Filament modal |
+| `->bottomSheet(...)` | its own options | its own options |
+
+The arguments of `everywhere()` are the defaults of each sheet:
+
+```php
+BottomSheet::everywhere(
+    below: 'md',
+    snapPoints: [0.25, 0.5, 0.75, 1.0],
+    initialHeight: 'content',
+    overlay: true,
+);
+```
+
+The default first height is `content`: a short confirmation opens at the height of its question and buttons. The footer actions stay at the bottom of the sheet.
+
+An action that calls `->bottomSheet(...)` keeps its own options and breakpoints. An option that it does not give comes from `everywhere()`. `->bottomSheet()` with no `->modalFrom()` or `->slideOverFrom()` is a sheet at each width. An action can also change only the breakpoint: `->modalFrom('md')` or `->slideOverFrom('xl')`, with no `->bottomSheet()`.
+
+To keep the Filament window at each width, opt out:
+
+```php
+Action::make('preview')
+    ->bottomSheet(false);
+```
+
+With the switch, a nested action of a sheet stacks on it as a second sheet, with no `->overlayParentActions()`. From the breakpoint, Filament nests the modals as it does by default. See [Nested actions](#nested-actions).
 
 ### A sheet at each width
 
@@ -147,7 +195,9 @@ The order of the breakpoints is free. `->bottomSheet()->slideOverFrom('md')->mod
 
 ### Nested actions
 
-A nested action that must stack on a sheet needs `->overlayParentActions()`:
+With `BottomSheet::everywhere()`, a nested action of a sheet stacks on it while the parent is a sheet. The stack rules are the same: only the top sheet takes an outside tap, Escape and the focus. From the breakpoint, Filament closes the parent modal and opens the nested one, as it does by default.
+
+Without the switch, a nested action that must stack on a sheet needs `->overlayParentActions()`:
 
 ```php
 Action::make('reset')
@@ -236,8 +286,9 @@ A Filament modal that is not a bottom sheet is not in the sheet stack. When such
 
 These rules stop a wrong combination at once, with an `InvalidArgumentException`:
 
-- `->bottomSheet()` cannot be used with `->slideOver()` or `->modal(false)`. Use `->slideOverFrom()` or `->modalFrom()`.
-- `->modalFrom()`, `->slideOverFrom()` and the deprecated `->bottomSheetOverlay()` need `->bottomSheet()`.
+- `->bottomSheet()` cannot be used with `->slideOver()` or `->modal(false)`. Use `->slideOverFrom()` or `->modalFrom()`. With `BottomSheet::everywhere()`, an action with `->slideOver()` and no `->bottomSheet()` is correct: the plugin makes it a sheet with a slide-over from the breakpoint.
+- `->modalFrom()`, `->slideOverFrom()` and the deprecated `->bottomSheetOverlay()` need `->bottomSheet()`, or `BottomSheet::everywhere()`.
+- A breakpoint of `everywhere()` must be one of the names below.
 - `->modalFrom()` and `->slideOverFrom()` cannot use the same breakpoint.
 - A breakpoint name must be one of the names below.
 
@@ -247,6 +298,7 @@ The macros can be called in each order. The plugin checks the conflicts when Fil
 
 | Option | Default | Effect |
 | --- | --- | --- |
+| `BottomSheet::everywhere($below)` | off, `lg` | Each action with a modal is a sheet below `$below`, and keeps its own window type from it. The other arguments are the defaults of `snapPoints`, `initialHeight` (`'content'`) and `overlay`. |
 | `bottomSheet($condition)` | on | The action is a sheet at each width that has no other type. `false`, or a closure that returns `false`, renders the action as Filament does. |
 | `bottomSheet(snapPoints: $points)` | `[0.25, 0.5, 0.75, 1.0]` | Heights where the sheet rests after a drag, as parts of the visible viewport height. At `1.0`, the sheet fills the screen. The handle and the header stay below the top safe area. |
 | `bottomSheet(initialHeight: $height)` | `'content'` | The height of each open. It can be any part of the viewport, not only a snap point. `'content'` opens at the height of the header, body and footer. When the content height cannot be measured, the sheet opens at `0.5`. |
@@ -285,7 +337,10 @@ The breakpoint names are the Tailwind CSS v4 defaults:
 
 ## Limits
 
-- A nested action stacks on a sheet only when it calls `->overlayParentActions()`.
+- Without `BottomSheet::everywhere()`, a nested action stacks on a sheet only when it calls `->overlayParentActions()`.
+- `BottomSheet::everywhere()` adds the sheet attributes when Filament makes the action. A later `->extraModalWindowAttributes([...])` without `merge: true` removes them. Use `merge: true`, or call `->bottomSheet()` after it.
+- With `BottomSheet::everywhere()`, a nested action that opts out with `->bottomSheet(false)` opens as a Filament modal over the parent sheet.
+- With `BottomSheet::everywhere()`, an action with `->slideOver()` renders as a Filament modal on the server. The directive shows the slide-over from the breakpoint.
 - The slide-over type uses the sticky settings of the action, as a Filament slide-over does.
 - `composer serve` builds the workbench theme and starts the demo panel.
 
