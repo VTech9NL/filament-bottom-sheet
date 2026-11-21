@@ -125,6 +125,24 @@ const SPRING_DAMPING_RATIO = 0.86
 
 const NOT_DRAGGABLE = 'input, textarea, select, button, a, [contenteditable]'
 
+// The input types that do not open a keyboard.
+const NOT_TEXT_INPUTS = [
+    'checkbox',
+    'radio',
+    'range',
+    'button',
+    'submit',
+    'reset',
+    'file',
+    'color',
+    'hidden',
+]
+
+const isTextField = (node) =>
+    node instanceof HTMLTextAreaElement ||
+    !!node?.isContentEditable ||
+    (node instanceof HTMLInputElement && !NOT_TEXT_INPUTS.includes(node.type))
+
 // The visible viewport: its height, and the height of the part of the layout
 // viewport under it (the keyboard). With no visual viewport, or a pinch
 // zoom, it is the layout viewport.
@@ -238,7 +256,8 @@ const readOptions = (el) => ({
  * - `requestClose()`: close the part, as the user asks for it.
  *
  * `sheet.reason` is the cause of the last motion: `drag`, `snap`,
- * `escape` (the handle key), or a value that the part sets.
+ * `escape` (the handle key), `focus` (a text field), or a value that the
+ * part sets.
  */
 const createSheet = (part) => {
     const { host } = part
@@ -262,6 +281,8 @@ const createSheet = (part) => {
     // The viewport height of the last measure.
     let measuredHeight = 0
     let frame = null
+    // The height that the spring moves to, while it moves.
+    let springTarget = null
     let drag = null
 
     const viewportHeight = () => readViewport().height
@@ -320,6 +341,8 @@ const createSheet = (part) => {
             cancelAnimationFrame(frame)
             frame = null
         }
+
+        springTarget = null
     }
 
     // A damped spring from the current position to the target. The velocity
@@ -334,6 +357,8 @@ const createSheet = (part) => {
 
             return
         }
+
+        springTarget = target
 
         const damping = 2 * Math.sqrt(SPRING_STIFFNESS) * SPRING_DAMPING_RATIO
         let speed = velocity * 1000
@@ -362,6 +387,7 @@ const createSheet = (part) => {
                 sheet.position = target
                 render()
                 frame = null
+                springTarget = null
                 onDone?.()
 
                 return
@@ -384,6 +410,7 @@ const createSheet = (part) => {
 
     sheet.open = () => {
         stop()
+        isAtInitial = true
         part.render(null, '100%')
 
         // Wait for `x-show` to show the sheet, so its height
@@ -422,16 +449,18 @@ const createSheet = (part) => {
     // the first height. After it, it is the snap point of the same part of
     // the viewport.
     sheet.place = () => {
+        // A spring keeps its target: the keyboard can open while the sheet
+        // moves to its highest snap point.
+        const from = springTarget > 0 ? springTarget : sheet.position
+
         stop()
 
-        const ratio = sheet.position / (measuredHeight || 1)
+        const ratio = from / (measuredHeight || 1)
 
         measureRests()
 
         sheet.position =
-            sheet.position && !isAtInitial
-                ? nearest(ratio * viewportHeight())
-                : initial
+            from && !isAtInitial ? nearest(ratio * viewportHeight()) : initial
         render()
     }
 
@@ -713,6 +742,30 @@ const createSheet = (part) => {
         dismiss()
     }
 
+    // A focus on a text field moves the top sheet to its highest snap point,
+    // above the keyboard. Not in a drag, not in the open motion (the
+    // Filament autofocus), and not when the sheet slides out.
+    const onFocusIn = (event) => {
+        if (
+            !isTextField(event.target) ||
+            !sheet.isActive ||
+            !sheet.isOpen() ||
+            !isTopmostSheet(sheet) ||
+            drag ||
+            (frame && isAtInitial) ||
+            !rests.length ||
+            springTarget < 0 ||
+            !part.sheet()?.contains(event.target) ||
+            (springTarget ?? sheet.position) >= highest() - 1
+        ) {
+            return
+        }
+
+        isAtInitial = false
+        sheet.reason = 'focus'
+        springTo(highest())
+    }
+
     sheet.moveBack = (isBack) =>
         part.backClasses.forEach((name) =>
             host.classList.toggle(name, isBack && sheet.isActive),
@@ -751,6 +804,7 @@ const createSheet = (part) => {
     host.addEventListener('touchcancel', endDrag)
     host.addEventListener('pointerdown', onPointerDown)
     host.addEventListener('keydown', onKeyDown)
+    host.addEventListener('focusin', onFocusIn)
 
     sheet.destroy = () => {
         sheet.deactivate()
@@ -760,6 +814,7 @@ const createSheet = (part) => {
         host.removeEventListener('touchcancel', endDrag)
         host.removeEventListener('pointerdown', onPointerDown)
         host.removeEventListener('keydown', onKeyDown)
+        host.removeEventListener('focusin', onFocusIn)
         window.removeEventListener('pointermove', onPointerMove)
         window.removeEventListener('pointerup', onPointerUp)
     }

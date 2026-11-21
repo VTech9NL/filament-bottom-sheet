@@ -216,7 +216,7 @@ The window events open and close a sheet: `bottom-sheet:open` and `bottom-sheet:
 | `bottom-sheet:closed` | The sheet is closed. |
 | `bottom-sheet:resize` | The visible height changes, also during the motion. |
 
-Each `detail` has `id`, `height` (the visible height in px, `0` when closed) and `reason`: `drag`, `snap`, `outside`, `escape`, `event` or `viewport`. The host also has the CSS variable `--bottom-sheet-height` with the visible height.
+Each `detail` has `id`, `height` (the visible height in px, `0` when closed) and `reason`: `drag`, `snap`, `outside`, `escape`, `event`, `viewport` or `focus`. The host also has the CSS variable `--bottom-sheet-height` with the visible height.
 
 ### The outside tap
 
@@ -257,6 +257,8 @@ The macros can be called in each order. The plugin checks the conflicts when Fil
 An argument that is `null` does not change the option. The macros `bottomSheetSnapPoints()`, `bottomSheetInitialHeight()` and `bottomSheetOverlay()` still work, but they are deprecated. When you use a macro and an argument, the last call wins.
 
 A value must be finite, more than 0 and at most 1. The snap points must be sorted and unique. A wrong value throws an `InvalidArgumentException`.
+
+A focus on a text field in the top sheet moves the sheet to its highest snap point, as the keyboard opens. A sheet in a drag does not move. When the focus leaves, the sheet stays at its height.
 
 With the keyboard open, the sheet stays above the keyboard and keeps its part of the visible viewport.
 
